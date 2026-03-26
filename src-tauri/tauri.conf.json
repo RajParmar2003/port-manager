@@ -1,0 +1,65 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "withGlobalTauri": true,
+    "devPath": "../src",
+    "distDir": "../src"
+  },
+  "package": {
+    "productName": "Port Manager",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "DeveloperTool",
+      "copyright": "",
+      "deb": { "depends": [] },
+      "externalBin": [],
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "identifier": "com.portmanager.app",
+      "longDescription": "Scan, group, and kill open ports on macOS without touching the terminal.",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": [],
+      "shortDescription": "macOS Port Manager",
+      "targets": "all",
+      "windows": { "certificateThumbprint": null, "digestAlgorithm": "sha256", "timestampUrl": "" }
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 750,
+        "resizable": true,
+        "title": "Port Manager",
+        "width": 960,
+        "minWidth": 700,
+        "minHeight": 500,
+        "decorations": true,
+        "transparent": false
+      }
+    ]
+  }
+}

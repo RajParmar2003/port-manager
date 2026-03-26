@@ -1,0 +1,20 @@
+# Rust / Cargo
+src-tauri/target/
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Tauri build output
+src-tauri/target/

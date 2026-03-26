@@ -363,16 +363,7 @@ struct ProcessInfo {
 }
 
 fn get_process_info(pid: u32) -> ProcessInfo {
-    let output = Command::new("ps")
-        .args([
-            "-ww",
-            "-p",
-            &pid.to_string(),
-            "-o",
-            "command=,pcpu=,rss=,ppid=,tty=",
-        ])
-        .output();
-
+    let pid_str = pid.to_string();
     let default = ProcessInfo {
         command: format!("(unknown — pid {})", pid),
         cpu: 0.0,
@@ -381,38 +372,41 @@ fn get_process_info(pid: u32) -> ProcessInfo {
         tty: "??".to_string(),
     };
 
-    match output {
+    // IMPORTANT: macOS `ps` truncates `command=` to 16 chars when combined with
+    // other fields via commas. Two separate calls avoid this.
+    let cmd_output = Command::new("ps")
+        .args(["-ww", "-p", &pid_str, "-o", "command="])
+        .output();
+    let stats_output = Command::new("ps")
+        .args(["-ww", "-p", &pid_str, "-o", "pcpu=,rss=,ppid=,tty="])
+        .output();
+
+    let command = match cmd_output {
         Ok(out) => {
             let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if raw.is_empty() {
-                return default;
-            }
-            // ps output: "command... CPU RSS PPID TTY"
-            // Parse from the right since command can contain spaces
+            if raw.is_empty() { default.command.clone() } else { raw }
+        }
+        Err(_) => default.command.clone(),
+    };
+
+    let (cpu, memory_mb, ppid, tty) = match stats_output {
+        Ok(out) => {
+            let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
             let parts: Vec<&str> = raw.split_whitespace().collect();
-            let len = parts.len();
-            if len >= 5 {
-                let tty = parts[len - 1].to_string();
-                let ppid: u32 = parts[len - 2].parse().unwrap_or(0);
-                let rss_kb: f32 = parts[len - 3].parse().unwrap_or(0.0);
-                let cpu: f32 = parts[len - 4].parse().unwrap_or(0.0);
-                let cmd = parts[..len - 4].join(" ");
-                ProcessInfo {
-                    command: cmd,
-                    cpu,
-                    memory_mb: rss_kb / 1024.0,
-                    ppid,
-                    tty,
-                }
+            if parts.len() >= 4 {
+                let cpu: f32 = parts[0].parse().unwrap_or(0.0);
+                let rss_kb: f32 = parts[1].parse().unwrap_or(0.0);
+                let ppid: u32 = parts[2].parse().unwrap_or(0);
+                let tty = parts[3].to_string();
+                (cpu, rss_kb / 1024.0, ppid, tty)
             } else {
-                ProcessInfo {
-                    command: raw,
-                    ..default
-                }
+                (0.0, 0.0, 0, "??".to_string())
             }
         }
-        Err(_) => default,
-    }
+        Err(_) => (0.0, 0.0, 0, "??".to_string()),
+    };
+
+    ProcessInfo { command, cpu, memory_mb, ppid, tty }
 }
 
 // ─── Launchctl-based service detection (accurate, PID-matched) ──────────────

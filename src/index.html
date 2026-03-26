@@ -217,7 +217,7 @@
       width: 28px; height: 28px; border-radius: 6px;
       background: rgba(52,211,153,0.1); color: var(--green);
       display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: all 0.12s;
+      opacity: 0; transition: all 0.12s; margin-left: 4px;
     }
     .port-row:hover .copy-path-btn { opacity: 1; }
     .copy-path-btn:hover { background: var(--green); color: #fff; }
@@ -438,13 +438,13 @@ function invokeCommand(cmd, args) {
 
 // ─── Category config ───────────────────────────────────────────────────────
 var CATEGORIES = {
-  "Dev Servers": { color: "#34d399", icon: "D" },
-  "Databases":   { color: "#f59e42", icon: "B" },
-  "Web / Proxy": { color: "#60a5fa", icon: "W" },
-  "Containers":  { color: "#a78bfa", icon: "C" },
-  "Apps":        { color: "#f472b6", icon: "A" },
-  "System":      { color: "#94a3b8", icon: "S" },
-  "Other":       { color: "#64748b", icon: "?" }
+  "Dev Servers": { color: "#34d399" },
+  "Databases":   { color: "#f59e42" },
+  "Web / Proxy": { color: "#60a5fa" },
+  "Containers":  { color: "#a78bfa" },
+  "Apps":        { color: "#f472b6" },
+  "System":      { color: "#94a3b8" },
+  "Other":       { color: "#64748b" }
 };
 
 // ─── State ─────────────────────────────────────────────────────────────────
@@ -709,7 +709,7 @@ function render() {
 
         html += '<div class="group"><div class="group-header"><div class="group-header-left">';
         html += '<div class="checkbox' + (allSel ? ' checked' : '') + '" onclick="toggleGroup(\'' + esc(catName) + '\')">' + (allSel ? '&#10003;' : '') + '</div>';
-        html += '<span class="group-label" style="color:' + catInfo.color + '">' + catInfo.icon + ' ' + esc(catName) + '</span>';
+        html += '<span class="group-label" style="color:' + catInfo.color + '">' + esc(catName) + '</span>';
         html += '<span class="group-count">' + items.length + '</span></div>';
         html += '<button class="btn btn-sm" style="background:' + rgbaFrom(catInfo.color, 0.08) + ';color:' + catInfo.color + ';border:1px solid ' + rgbaFrom(catInfo.color, 0.2) + '"';
         html += ' onclick="openModal(\'group\',\'' + esc(catName) + '\')">Kill group</button></div>';

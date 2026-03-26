@@ -426,6 +426,9 @@ function rgbaFrom(hex, alpha) {
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────
+var autoScanInterval = null;
+var AUTO_SCAN_MS = 3000; // poll every 3 seconds
+
 function doScan() {
   state.scanning = true;
   state.selected = {};
@@ -440,11 +443,38 @@ function doScan() {
     }
     state.scanning = false;
     render();
+    startAutoScan();
   }).catch(function(e) {
     showToast('Failed to scan: ' + e, 'error');
     state.scanning = false;
     render();
+    startAutoScan();
   });
+}
+
+// Silent background rescan — no skeleton, no toast, preserves selections
+function doSilentScan() {
+  if (state.scanning || state.modal) return; // don't interrupt user actions
+  invokeCommand('scan_ports').then(function(result) {
+    if (!result || result.error) return;
+    var newPorts = result.ports || [];
+    // Detect if anything actually changed
+    var oldKey = state.ports.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
+    var newKey = newPorts.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
+    if (oldKey !== newKey) {
+      state.ports = newPorts;
+      render();
+    }
+  }).catch(function() {}); // silently ignore errors on background scan
+}
+
+function startAutoScan() {
+  if (autoScanInterval) clearInterval(autoScanInterval);
+  autoScanInterval = setInterval(doSilentScan, AUTO_SCAN_MS);
+}
+
+function stopAutoScan() {
+  if (autoScanInterval) { clearInterval(autoScanInterval); autoScanInterval = null; }
 }
 
 function doKill() {

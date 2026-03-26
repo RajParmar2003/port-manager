@@ -210,6 +210,28 @@ fn categorize_port(process: &str, port: u16, user: &str) -> String {
         return "Databases".to_string();
     }
 
+    // AI / ML — check before Dev Servers since Jupyter/Ollama often run on dev-range ports
+    let ai_procs = [
+        "ollama", "jupyter", "jupyterlab", "notebook", "mlflow", "tensorboard",
+        "triton", "vllm", "lmstudio", "localai", "llamacpp", "text-generation",
+    ];
+    if ai_procs.iter().any(|p| proc_lower.contains(p))
+        || [11434, 8888, 8889, 8501, 8502, 8265, 5001, 6006, 3001].contains(&port)
+    {
+        return "AI / ML".to_string();
+    }
+
+    // Message Queues
+    let mq_procs = [
+        "rabbitmq", "beam.smp", "kafka", "nats-server", "nats", "pulsar",
+        "mosquitto", "emqx", "zeromq",
+    ];
+    if mq_procs.iter().any(|p| proc_lower.contains(p))
+        || [5672, 15672, 9092, 4222, 8222, 6650, 1883, 8883].contains(&port)
+    {
+        return "Message Queues".to_string();
+    }
+
     let container_procs = ["docker", "containerd", "kubelet", "kubectl", "podman"];
     if container_procs.iter().any(|p| proc_lower.contains(p))
         || [2375, 2376, 2377, 10250, 10255].contains(&port)
@@ -1069,7 +1091,7 @@ fn main() {
                 *hist = load_history_from_disk();
             }
 
-            // Spawn background scan thread — runs every 3s regardless of window visibility.
+            // Spawn background scan thread — runs every 5s (matches Activity Monitor default).
             // This is the primary scan driver; the frontend listens for "ports-updated" events.
             let app_handle = app.handle();
             let bg_state = state.inner().clone();
@@ -1078,7 +1100,7 @@ fn main() {
                 std::thread::sleep(Duration::from_millis(500));
                 loop {
                     run_scan_cycle(&app_handle, &bg_state);
-                    std::thread::sleep(Duration::from_secs(3));
+                    std::thread::sleep(Duration::from_secs(5));
                 }
             });
 

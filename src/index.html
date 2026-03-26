@@ -150,9 +150,22 @@
     .group-count { font-size: 11px; color: var(--text-dim); }
     .group-table { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); }
 
+    .col-header {
+      display: grid;
+      grid-template-columns: 30px 60px 1fr 70px 60px 72px 32px 32px 32px;
+      align-items: center; gap: 8px; padding: 6px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .col-header span {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--text-dim); font-family: var(--sans);
+    }
+    .col-header .col-right { text-align: right; }
+
     .port-row {
       display: grid;
-      grid-template-columns: 30px 60px 1fr 70px 60px 72px 36px 36px;
+      grid-template-columns: 30px 60px 1fr 70px 60px 72px 32px 32px 32px;
       align-items: center; gap: 8px; padding: 10px 14px;
       border-bottom: 1px solid var(--border); transition: background 0.12s; cursor: pointer;
     }
@@ -160,7 +173,7 @@
     .port-row:hover { background: var(--surface-hover); }
     .port-num { font-family: var(--mono); font-size: 13px; font-weight: 600; }
     .proc-name { font-size: 13px; font-weight: 600; }
-    .proc-cmd { font-size: 11px; color: var(--text-dim); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .proc-cmd { font-size: 11px; color: var(--text-dim); font-family: var(--mono); word-break: break-all; line-height: 1.5; margin-top: 2px; }
     .proc-meta { display: flex; gap: 4px; align-items: center; margin-top: 2px; }
     .meta-tag { font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600; cursor: default; }
     .meta-tag-clickable { cursor: pointer; }
@@ -178,14 +191,23 @@
     .port-row:hover .kill-single { opacity: 1; }
     .kill-single:hover { background: var(--red); color: #fff; }
 
-    .copy-btn {
+    .copy-url-btn {
       width: 28px; height: 28px; border-radius: 6px;
       background: rgba(99,102,241,0.1); color: var(--accent);
-      font-size: 12px; display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.12s;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: all 0.12s;
     }
-    .port-row:hover .copy-btn { opacity: 1; }
-    .copy-btn:hover { background: var(--accent); color: #fff; }
+    .port-row:hover .copy-url-btn { opacity: 1; }
+    .copy-url-btn:hover { background: var(--accent); color: #fff; }
+
+    .copy-path-btn {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: rgba(52,211,153,0.1); color: var(--green);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: all 0.12s;
+    }
+    .port-row:hover .copy-path-btn { opacity: 1; }
+    .copy-path-btn:hover { background: var(--green); color: #fff; }
 
     .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; }
     .checkbox {
@@ -665,6 +687,7 @@ function render() {
         html += '<button class="btn btn-sm" style="background:' + rgbaFrom(catInfo.color, 0.08) + ';color:' + catInfo.color + ';border:1px solid ' + rgbaFrom(catInfo.color, 0.2) + '"';
         html += ' onclick="openModal(\'group\',\'' + esc(catName) + '\')">Kill group</button></div>';
         html += '<div class="group-table">';
+        html += '<div class="col-header"><span></span><span>Port</span><span>Process</span><span class="col-right">CPU</span><span class="col-right">Mem</span><span>PID</span><span></span><span></span><span></span></div>';
 
         for (var pi = 0; pi < items.length; pi++) {
           var p = items[pi], sel = state.selected[p.pid];
@@ -690,8 +713,13 @@ function render() {
           html += '</div>';
           html += '<span class="cpu-label">' + (p.cpu > 0 ? p.cpu.toFixed(1) + '%' : '-') + '</span>';
           html += '<span class="mem-label">' + (p.memory_mb > 0.1 ? p.memory_mb.toFixed(0) + 'M' : '-') + '</span>';
-          html += '<span class="pid-label">PID ' + p.pid + '</span>';
-          html += '<button class="copy-btn" onclick="event.stopPropagation();copyToClipboard(\'http://localhost:' + p.port + '\')" title="Copy localhost URL">&#x2398;</button>';
+          html += '<span class="pid-label">' + p.pid + '</span>';
+          html += '<button class="copy-url-btn" onclick="event.stopPropagation();copyToClipboard(\'http://localhost:' + p.port + '\')" title="Copy URL (localhost:' + p.port + ')">';
+          html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/></svg>';
+          html += '</button>';
+          html += '<button class="copy-path-btn" onclick="event.stopPropagation();copyToClipboard(\'' + esc(p.command.split(' ')[0]) + '\')" title="Copy path (' + esc(p.command.split(' ')[0]) + ')">';
+          html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/><path d="M8 9.5l1.5 1.5L8 12.5" stroke-width="1.2"/></svg>';
+          html += '</button>';
           html += '<button class="kill-single" onclick="event.stopPropagation();openModal(\'single\',null,' + p.pid + ')">&#10005;</button>';
           html += '</div>';
         }

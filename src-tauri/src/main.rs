@@ -384,13 +384,8 @@ fn get_process_info(pid: u32) -> ProcessInfo {
                 let rss_kb: f32 = parts[len - 3].parse().unwrap_or(0.0);
                 let cpu: f32 = parts[len - 4].parse().unwrap_or(0.0);
                 let cmd = parts[..len - 4].join(" ");
-                let cmd_truncated = if cmd.len() > 200 {
-                    format!("{}...", &cmd[..200])
-                } else {
-                    cmd
-                };
                 ProcessInfo {
-                    command: cmd_truncated,
+                    command: cmd,
                     cpu,
                     memory_mb: rss_kb / 1024.0,
                     ppid,

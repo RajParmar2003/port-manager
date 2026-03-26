@@ -33,6 +33,7 @@ pub struct PortEntry {
     pub category: String,
     pub cpu: f32,
     pub memory_mb: f32,
+    pub uptime: String, // e.g. "2d 6h", "45m", "12s", "N/A"
     pub is_orphan: bool,
     pub docker_container: Option<String>, // "container_name (image) — status"
     pub launch_agent: Option<String>,     // launchctl label (e.g. "homebrew.mxcl.postgresql@14")
@@ -359,17 +360,19 @@ struct ProcessInfo {
     cpu: f32,
     memory_mb: f32,
     ppid: u32,
-    tty: String, // "??" = no controlling terminal, "s000" etc. = has terminal
+    tty: String,   // "??" = no controlling terminal, "s000" etc. = has terminal
+    uptime: String, // elapsed time from ps, e.g. "01-06:05:34" or "23:45" or "N/A"
 }
 
 fn get_process_info(pid: u32) -> ProcessInfo {
     let pid_str = pid.to_string();
     let default = ProcessInfo {
         command: format!("(unknown — pid {})", pid),
-        cpu: 0.0,
-        memory_mb: 0.0,
+        cpu: -1.0,
+        memory_mb: -1.0,
         ppid: 0,
         tty: "??".to_string(),
+        uptime: "N/A".to_string(),
     };
 
     // IMPORTANT: macOS `ps` truncates `command=` to 16 chars when combined with
@@ -378,7 +381,7 @@ fn get_process_info(pid: u32) -> ProcessInfo {
         .args(["-ww", "-p", &pid_str, "-o", "command="])
         .output();
     let stats_output = Command::new("ps")
-        .args(["-ww", "-p", &pid_str, "-o", "pcpu=,rss=,ppid=,tty="])
+        .args(["-ww", "-p", &pid_str, "-o", "pcpu=,rss=,ppid=,tty=,etime="])
         .output();
 
     let command = match cmd_output {
@@ -389,24 +392,26 @@ fn get_process_info(pid: u32) -> ProcessInfo {
         Err(_) => default.command.clone(),
     };
 
-    let (cpu, memory_mb, ppid, tty) = match stats_output {
+    let (cpu, memory_mb, ppid, tty, uptime) = match stats_output {
         Ok(out) => {
             let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
             let parts: Vec<&str> = raw.split_whitespace().collect();
-            if parts.len() >= 4 {
-                let cpu: f32 = parts[0].parse().unwrap_or(0.0);
-                let rss_kb: f32 = parts[1].parse().unwrap_or(0.0);
+            if parts.len() >= 5 {
+                let cpu: f32 = parts[0].parse().unwrap_or(-1.0);
+                let rss_kb: f32 = parts[1].parse().unwrap_or(-1.0);
                 let ppid: u32 = parts[2].parse().unwrap_or(0);
                 let tty = parts[3].to_string();
-                (cpu, rss_kb / 1024.0, ppid, tty)
+                let etime_raw = parts[4].to_string(); // e.g. "01-06:05:34" or "23:45" or "05"
+                let uptime = format_etime(&etime_raw);
+                (cpu, rss_kb / 1024.0, ppid, tty, uptime)
             } else {
-                (0.0, 0.0, 0, "??".to_string())
+                (-1.0, -1.0, 0, "??".to_string(), "N/A".to_string())
             }
         }
-        Err(_) => (0.0, 0.0, 0, "??".to_string()),
+        Err(_) => (-1.0, -1.0, 0, "??".to_string(), "N/A".to_string()),
     };
 
-    ProcessInfo { command, cpu, memory_mb, ppid, tty }
+    ProcessInfo { command, cpu, memory_mb, ppid, tty, uptime }
 }
 
 // ─── Launchctl-based service detection (accurate, PID-matched) ──────────────
@@ -433,6 +438,40 @@ fn build_launchctl_pid_map() -> HashMap<u32, String> {
         }
     }
     map
+}
+
+// ─── Elapsed time formatting ─────────────────────────────────────────────────
+// Converts ps `etime` output (e.g. "01-06:05:34", "23:45:12", "45:12", "12")
+// into a human-readable short format (e.g. "1d 6h", "23h 45m", "45m", "12s").
+
+fn format_etime(raw: &str) -> String {
+    // Format: [[DD-]HH:]MM:SS
+    let (days, rest) = if let Some(pos) = raw.find('-') {
+        let d: u64 = raw[..pos].parse().unwrap_or(0);
+        (d, &raw[pos + 1..])
+    } else {
+        (0, raw.as_ref())
+    };
+
+    let parts: Vec<u64> = rest.split(':').filter_map(|p| p.parse().ok()).collect();
+    let (hours, minutes, seconds) = match parts.len() {
+        3 => (parts[0], parts[1], parts[2]),
+        2 => (0, parts[0], parts[1]),
+        1 => (0, 0, parts[0]),
+        _ => return "N/A".to_string(),
+    };
+
+    let total_hours = days * 24 + hours;
+
+    if days > 0 {
+        format!("{}d {}h", days, hours)
+    } else if total_hours > 0 {
+        format!("{}h {}m", total_hours, minutes)
+    } else if minutes > 0 {
+        format!("{}m {}s", minutes, seconds)
+    } else {
+        format!("{}s", seconds)
+    }
 }
 
 // ─── Executable path extraction ──────────────────────────────────────────────
@@ -560,6 +599,7 @@ fn do_scan_ports() -> Vec<PortEntry> {
             category,
             cpu: info.cpu,
             memory_mb: (info.memory_mb * 10.0).round() / 10.0,
+            uptime: info.uptime,
             is_orphan,
             docker_container,
             launch_agent,

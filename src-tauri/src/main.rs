@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{
     AppHandle, CustomMenuItem, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
     SystemTrayMenuItem, SystemTraySubmenu,
@@ -29,6 +29,7 @@ pub struct PortEntry {
     pub state: String,
     pub user: String,
     pub command: String,
+    pub exe_path: String, // full executable path (handles spaces in paths)
     pub category: String,
     pub cpu: f32,
     pub memory_mb: f32,
@@ -37,7 +38,7 @@ pub struct PortEntry {
     pub launch_agent: Option<String>,     // launchctl label (e.g. "homebrew.mxcl.postgresql@14")
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ScanResult {
     pub ports: Vec<PortEntry>,
     pub error: Option<String>,
@@ -156,12 +157,23 @@ fn save_history_to_disk(history: &[HistoryEvent]) {
     }
 }
 
-// ─── App state ──────────────────────────────────────────────────────────────
+// ─── App state (Arc-wrapped for sharing with background thread) ─────────────
 
+#[derive(Clone)]
 pub struct AppState {
-    history: Mutex<Vec<HistoryEvent>>,
-    last_ports: Mutex<HashMap<(u32, u16), String>>, // (pid, port) -> process name
-    last_conflicts: Mutex<Vec<(u16, u16)>>,         // previously notified conflict pairs
+    history: Arc<Mutex<Vec<HistoryEvent>>>,
+    last_ports: Arc<Mutex<HashMap<(u32, u16), String>>>, // (pid, port) -> process name
+    last_conflicts: Arc<Mutex<Vec<(u16, u16)>>>,         // previously notified conflict pairs
+}
+
+impl AppState {
+    fn new() -> Self {
+        AppState {
+            history: Arc::new(Mutex::new(Vec::new())),
+            last_ports: Arc::new(Mutex::new(HashMap::new())),
+            last_conflicts: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
 }
 
 fn now_unix() -> u64 {
@@ -353,6 +365,7 @@ struct ProcessInfo {
 fn get_process_info(pid: u32) -> ProcessInfo {
     let output = Command::new("ps")
         .args([
+            "-ww",
             "-p",
             &pid.to_string(),
             "-o",
@@ -361,7 +374,7 @@ fn get_process_info(pid: u32) -> ProcessInfo {
         .output();
 
     let default = ProcessInfo {
-        command: format!("PID {}", pid),
+        command: format!("(unknown — pid {})", pid),
         cpu: 0.0,
         memory_mb: 0.0,
         ppid: 0,
@@ -426,6 +439,26 @@ fn build_launchctl_pid_map() -> HashMap<u32, String> {
         }
     }
     map
+}
+
+// ─── Executable path extraction ──────────────────────────────────────────────
+// Extracts the executable path from a full command string, handling spaces in
+// paths (e.g. "/Applications/Claude Helper.app/Contents/MacOS/Claude Helper --type=gpu").
+
+fn extract_exe_path(command: &str) -> String {
+    if !command.starts_with('/') {
+        // Not a full path — return first token
+        return command.split_whitespace().next().unwrap_or(command).to_string();
+    }
+    // Scan for flag boundary (" -") or second path argument (" /")
+    let bytes = command.as_bytes();
+    for i in 1..bytes.len() {
+        if bytes[i - 1] == b' ' && (bytes[i] == b'-' || bytes[i] == b'/') {
+            return command[..i - 1].to_string();
+        }
+    }
+    // No flags found — entire string is the path
+    command.to_string()
 }
 
 // ─── Orphan detection (accurate — no false positives) ───────────────────────
@@ -520,6 +553,7 @@ fn do_scan_ports() -> Vec<PortEntry> {
         let launch_agent = launchctl_map.get(&r.pid).cloned();
         let is_orphan = is_truly_orphan(info.ppid, launch_agent.is_some(), &info.tty);
 
+        let exe_path = extract_exe_path(&info.command);
         entries.push(PortEntry {
             pid: r.pid,
             process: r.process,
@@ -528,6 +562,7 @@ fn do_scan_ports() -> Vec<PortEntry> {
             state: r.state,
             user: r.user,
             command: info.command,
+            exe_path,
             category,
             cpu: info.cpu,
             memory_mb: (info.memory_mb * 10.0).round() / 10.0,
@@ -594,10 +629,9 @@ fn update_history(
     save_history_to_disk(history);
 }
 
-// ─── Tauri commands ─────────────────────────────────────────────────────────
+// ─── Shared scan cycle (used by both background thread and manual rescan) ───
 
-#[tauri::command]
-fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
+fn run_scan_cycle(app: &AppHandle, state: &AppState) -> Vec<PortEntry> {
     let ports = do_scan_ports();
 
     // Update history
@@ -611,11 +645,10 @@ fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
         for conflict in &conflicts {
             let key = (conflict.intended_port, conflict.actual_port);
             if !last_conflicts.contains(&key) {
-                send_conflict_notification(&app, conflict);
+                send_conflict_notification(app, conflict);
                 last_conflicts.push(key);
             }
         }
-        // Remove stale conflict entries
         let current_keys: Vec<(u16, u16)> = conflicts
             .iter()
             .map(|c| (c.intended_port, c.actual_port))
@@ -624,8 +657,22 @@ fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
     }
 
     // Update tray menu with current ports
-    update_tray_menu(&app, &ports);
+    update_tray_menu(app, &ports);
 
+    // Emit to frontend so it can render without polling
+    let _ = app.emit_all("ports-updated", ScanResult {
+        ports: ports.clone(),
+        error: None,
+    });
+
+    ports
+}
+
+// ─── Tauri commands ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
+    let ports = run_scan_cycle(&app, &state);
     ScanResult {
         ports,
         error: None,
@@ -902,6 +949,12 @@ fn main() {
             }
             SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
                 "quit" => {
+                    // Flush history to disk before exiting
+                    if let Some(state) = app.try_state::<AppState>() {
+                        if let Ok(hist) = state.history.lock() {
+                            save_history_to_disk(&hist);
+                        }
+                    }
                     std::process::exit(0);
                 }
                 "show" => {
@@ -967,9 +1020,11 @@ fn main() {
             _ => {}
         })
         .on_window_event(|event| {
-            // Hide to tray when red X is clicked
+            // Minimize to dock when red X is clicked.
+            // macOS natively restores minimized windows when the dock icon is clicked.
+            // Tray left-click and "Show Window" also restore.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
-                let _ = event.window().hide();
+                let _ = event.window().minimize();
                 api.prevent_close();
             }
         })
@@ -979,13 +1034,23 @@ fn main() {
             if let Ok(mut hist) = state.history.lock() {
                 *hist = load_history_from_disk();
             }
+
+            // Spawn background scan thread — runs every 3s regardless of window visibility.
+            // This is the primary scan driver; the frontend listens for "ports-updated" events.
+            let app_handle = app.handle();
+            let bg_state = state.inner().clone();
+            std::thread::spawn(move || {
+                // Small initial delay so the window has time to set up its event listener
+                std::thread::sleep(Duration::from_millis(500));
+                loop {
+                    run_scan_cycle(&app_handle, &bg_state);
+                    std::thread::sleep(Duration::from_secs(3));
+                }
+            });
+
             Ok(())
         })
-        .manage(AppState {
-            history: Mutex::new(Vec::new()),
-            last_ports: Mutex::new(HashMap::new()),
-            last_conflicts: Mutex::new(Vec::new()),
-        })
+        .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             scan_ports,
             kill_ports,
@@ -997,9 +1062,22 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building Port Manager")
-        .run(|_app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                api.prevent_exit();
+        .run(|app_handle, event| {
+            match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    api.prevent_exit();
+                }
+                // macOS: fires when dock icon is clicked (applicationDidBecomeActive).
+                // If window was hidden to tray, restore it.
+                tauri::RunEvent::Resumed { .. } => {
+                    if let Some(window) = app_handle.get_window("main") {
+                        if !window.is_visible().unwrap_or(true) {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                }
+                _ => {}
             }
         });
 }

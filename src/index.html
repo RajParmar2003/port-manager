@@ -152,8 +152,8 @@
 
     .col-header {
       display: grid;
-      grid-template-columns: 30px 60px 1fr 70px 60px 72px 32px 32px 32px;
-      align-items: center; gap: 8px; padding: 6px 14px;
+      grid-template-columns: 30px 60px 1fr 56px 56px 56px 32px 32px 32px;
+      align-items: center; gap: 4px; padding: 6px 14px;
       border-bottom: 1px solid var(--border);
       background: var(--bg);
     }
@@ -165,20 +165,20 @@
 
     .port-row {
       display: grid;
-      grid-template-columns: 30px 60px 1fr 70px 60px 72px 32px 32px 32px;
-      align-items: center; gap: 8px; padding: 10px 14px;
+      grid-template-columns: 30px 60px 1fr 56px 56px 56px 32px 32px 32px;
+      align-items: center; gap: 4px; padding: 10px 14px;
       border-bottom: 1px solid var(--border); transition: background 0.12s; cursor: pointer;
     }
     .port-row:last-child { border-bottom: none; }
     .port-row:hover { background: var(--surface-hover); }
     .port-num { font-family: var(--mono); font-size: 13px; font-weight: 600; }
     .proc-name { font-size: 13px; font-weight: 600; }
-    .proc-cmd { font-size: 11px; color: var(--text-dim); font-family: var(--mono); word-break: break-all; line-height: 1.5; margin-top: 2px; }
+    .proc-cmd { font-size: 11px; color: var(--text-dim); font-family: var(--mono); word-break: break-all; overflow-wrap: anywhere; line-height: 1.5; margin-top: 2px; white-space: normal; overflow: visible; }
     .proc-meta { display: flex; gap: 4px; align-items: center; margin-top: 2px; }
     .meta-tag { font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600; cursor: default; }
     .meta-tag-clickable { cursor: pointer; }
     .meta-tag-clickable:hover { opacity: 0.8; }
-    .pid-label { font-size: 11.5px; color: var(--text-dim); font-family: var(--mono); }
+    .pid-label { font-size: 11px; color: var(--text-dim); font-family: var(--mono); text-align: right; }
     .cpu-label { font-size: 11px; color: var(--text-dim); font-family: var(--mono); text-align: right; }
     .mem-label { font-size: 11px; color: var(--text-dim); font-family: var(--mono); text-align: right; }
 
@@ -195,7 +195,7 @@
       width: 28px; height: 28px; border-radius: 6px;
       background: rgba(99,102,241,0.1); color: var(--accent);
       display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: all 0.12s;
+      opacity: 0; transition: all 0.12s; margin-left: 8px;
     }
     .port-row:hover .copy-url-btn { opacity: 1; }
     .copy-url-btn:hover { background: var(--accent); color: #fff; }
@@ -381,12 +381,12 @@ function invokeCommand(cmd, args) {
     return new Promise(function(resolve) {
       setTimeout(function() {
         resolve({ ports: [
-          { pid: 1201, process: "node", port: 3000, protocol: "TCP", state: "LISTEN", user: "you", command: "node next dev", category: "Dev Servers", cpu: 2.3, memory_mb: 145.2, is_orphan: false, docker_container: null, launch_agent: null },
-          { pid: 1202, process: "node", port: 3001, protocol: "TCP", state: "LISTEN", user: "you", command: "node next dev", category: "Dev Servers", cpu: 0.1, memory_mb: 98.0, is_orphan: true, docker_container: null, launch_agent: null },
-          { pid: 502, process: "postgres", port: 5432, protocol: "TCP", state: "LISTEN", user: "_postgres", command: "/usr/local/opt/postgresql/bin/postgres", category: "Databases", cpu: 0.0, memory_mb: 22.4, is_orphan: false, docker_container: null, launch_agent: "homebrew.mxcl.postgresql@14" },
-          { pid: 503, process: "redis-server", port: 6379, protocol: "TCP", state: "LISTEN", user: "you", command: "redis-server *:6379", category: "Databases", cpu: 0.1, memory_mb: 3.2, is_orphan: false, docker_container: "my-redis (redis:7) — Up 2 hours", launch_agent: null },
-          { pid: 700, process: "nginx", port: 80, protocol: "TCP", state: "LISTEN", user: "root", command: "nginx: master", category: "Web / Proxy", cpu: 0.0, memory_mb: 5.1, is_orphan: false, docker_container: null, launch_agent: null },
-          { pid: 1500, process: "sshd", port: 22, protocol: "TCP", state: "LISTEN", user: "root", command: "sshd", category: "System", cpu: 0.0, memory_mb: 1.8, is_orphan: false, docker_container: null, launch_agent: null }
+          { pid: 1201, process: "node", port: 3000, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/node /app/next dev", exe_path: "/usr/local/bin/node", category: "Dev Servers", cpu: 2.3, memory_mb: 145.2, is_orphan: false, docker_container: null, launch_agent: null },
+          { pid: 1202, process: "node", port: 3001, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/node /app/next dev", exe_path: "/usr/local/bin/node", category: "Dev Servers", cpu: 0.1, memory_mb: 98.0, is_orphan: true, docker_container: null, launch_agent: null },
+          { pid: 502, process: "postgres", port: 5432, protocol: "TCP", state: "LISTEN", user: "_postgres", command: "/usr/local/opt/postgresql/bin/postgres -D /usr/local/var/postgres", exe_path: "/usr/local/opt/postgresql/bin/postgres", category: "Databases", cpu: 0.0, memory_mb: 22.4, is_orphan: false, docker_container: null, launch_agent: "homebrew.mxcl.postgresql@14" },
+          { pid: 503, process: "redis-server", port: 6379, protocol: "TCP", state: "LISTEN", user: "you", command: "redis-server *:6379", exe_path: "redis-server", category: "Databases", cpu: 0.1, memory_mb: 3.2, is_orphan: false, docker_container: "my-redis (redis:7) — Up 2 hours", launch_agent: null },
+          { pid: 700, process: "nginx", port: 80, protocol: "TCP", state: "LISTEN", user: "root", command: "/usr/local/bin/nginx -g daemon off;", exe_path: "/usr/local/bin/nginx", category: "Web / Proxy", cpu: 0.0, memory_mb: 5.1, is_orphan: false, docker_container: null, launch_agent: null },
+          { pid: 1500, process: "sshd", port: 22, protocol: "TCP", state: "LISTEN", user: "root", command: "/usr/sbin/sshd -i", exe_path: "/usr/sbin/sshd", category: "System", cpu: 0.0, memory_mb: 1.8, is_orphan: false, docker_container: null, launch_agent: null }
         ], error: null });
       }, 500);
     });
@@ -499,8 +499,6 @@ function getFilteredHistory() {
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────
-var autoScanInterval = null;
-var AUTO_SCAN_MS = 3000;
 
 function doScan() {
   state.scanning = true; state.selected = {}; render();
@@ -510,25 +508,29 @@ function doScan() {
     else { showToast('Scan complete — ' + state.ports.length + ' port' + (state.ports.length !== 1 ? 's' : '')); }
     state.scanning = false;
     invokeCommand('get_conflicts').then(function(c) { state.conflicts = c || []; render(); }).catch(function() { render(); });
-    startAutoScan();
-  }).catch(function(e) { showToast('Scan failed: ' + e, 'error'); state.scanning = false; render(); startAutoScan(); });
+  }).catch(function(e) { showToast('Scan failed: ' + e, 'error'); state.scanning = false; render(); });
 }
 
-function doSilentScan() {
+// Called when backend pushes new scan results via "ports-updated" event
+function onBackendScanUpdate(result) {
   if (state.scanning || state.modal) return;
-  invokeCommand('scan_ports').then(function(result) {
-    if (!result || result.error) return;
-    var newPorts = result.ports || [];
-    var oldKey = state.ports.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
-    var newKey = newPorts.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
-    if (oldKey !== newKey) {
-      state.ports = newPorts;
-      invokeCommand('get_conflicts').then(function(c) { state.conflicts = c || []; render(); }).catch(function() { render(); });
-    }
-  }).catch(function() {});
+  var newPorts = (result && result.ports) || [];
+  var oldKey = state.ports.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
+  var newKey = newPorts.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
+  if (oldKey !== newKey) {
+    state.ports = newPorts;
+    invokeCommand('get_conflicts').then(function(c) { state.conflicts = c || []; render(); }).catch(function() { render(); });
+  }
 }
 
-function startAutoScan() { if (autoScanInterval) clearInterval(autoScanInterval); autoScanInterval = setInterval(doSilentScan, AUTO_SCAN_MS); }
+// Listen for backend-pushed scan results (runs every 3s from Rust thread, even when window is hidden)
+try {
+  if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+    window.__TAURI__.event.listen('ports-updated', function(event) {
+      onBackendScanUpdate(event.payload);
+    });
+  }
+} catch(e) {}
 
 function doKill() {
   if (!state.modal) return;
@@ -553,7 +555,7 @@ function doFreePort() {
     if (r.success && r.killed_pid) {
       showToast('Freed :' + r.port + ' (killed ' + r.killed_process + ' PID ' + r.killed_pid + ')');
       state.freePortValue = '';
-      doSilentScan();
+      doScan();
     } else if (r.success) {
       showToast('Port ' + r.port + ' is already free');
       state.freePortValue = '';
@@ -582,7 +584,7 @@ function doClearHistory() {
 function stopAgent(label) {
   invokeCommand('stop_launch_agent', { label: label }).then(function(msg) {
     showToast(msg || 'Stop signal sent');
-    setTimeout(doSilentScan, 1000); // rescan after a beat to see if it stopped
+    setTimeout(doScan, 1000); // rescan after a beat to see if it stopped
   }).catch(function(e) { showToast('Stop failed: ' + e, 'error'); });
 }
 
@@ -601,14 +603,26 @@ function render() {
   // Header
   html += '<div class="header"><div class="header-left">';
   html += '<div class="app-icon"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">';
-  html += '<defs><linearGradient id="ig" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>';
-  html += '<rect width="36" height="36" rx="8" fill="url(#ig)"/><circle cx="18" cy="18" r="7" fill="none" stroke="#fff" stroke-width="1.8" opacity="0.9"/><circle cx="18" cy="18" r="2.5" fill="#fff" opacity="0.95"/>';
-  html += '<line x1="18" y1="3.5" x2="18" y2="9.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>';
-  html += '<line x1="18" y1="26.5" x2="18" y2="32.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>';
-  html += '<line x1="3.5" y1="18" x2="9.5" y2="18" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>';
-  html += '<line x1="26.5" y1="18" x2="32.5" y2="18" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>';
-  html += '<circle cx="18" cy="3.5" r="1.2" fill="#fff" opacity="0.8"/><circle cx="18" cy="32.5" r="1.2" fill="#fff" opacity="0.8"/>';
-  html += '<circle cx="3.5" cy="18" r="1.2" fill="#fff" opacity="0.8"/><circle cx="32.5" cy="18" r="1.2" fill="#fff" opacity="0.8"/>';
+  html += '<defs><linearGradient id="ig" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#16213e"/></linearGradient></defs>';
+  // Dark rounded background
+  html += '<rect width="36" height="36" rx="8" fill="url(#ig)"/>';
+  // Port housing (metallic gray)
+  html += '<rect x="7" y="9" width="22" height="19" rx="3" fill="#6b7280" opacity="0.9"/>';
+  html += '<rect x="8" y="10" width="20" height="17" rx="2" fill="#4b5563"/>';
+  // Port cavity (dark opening)
+  html += '<rect x="10" y="12" width="16" height="11" rx="1" fill="#111827"/>';
+  // Gold pins (8 pins)
+  html += '<line x1="12" y1="14" x2="12" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  html += '<line x1="14" y1="14" x2="14" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  html += '<line x1="16" y1="14" x2="16" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  html += '<line x1="18" y1="14" x2="18" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  html += '<line x1="20" y1="14" x2="20" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  html += '<line x1="22" y1="14" x2="22" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  html += '<line x1="24" y1="14" x2="24" y2="21" stroke="#f59e0b" stroke-width="1" stroke-linecap="round"/>';
+  // Clip/notch at top
+  html += '<rect x="14" y="5" width="8" height="5" rx="1" fill="#6b7280"/>';
+  // Green LED indicator
+  html += '<circle cx="27" cy="7" r="2" fill="#22c55e"/><circle cx="27" cy="7" r="1" fill="#4ade80" opacity="0.7"/>';
   html += '</svg></div>';
   html += '<div><h1>Port Manager</h1>';
   html += '<div class="subtitle">' + state.ports.length + ' open port' + (state.ports.length !== 1 ? 's' : '') + '</div></div></div>';
@@ -687,7 +701,7 @@ function render() {
         html += '<button class="btn btn-sm" style="background:' + rgbaFrom(catInfo.color, 0.08) + ';color:' + catInfo.color + ';border:1px solid ' + rgbaFrom(catInfo.color, 0.2) + '"';
         html += ' onclick="openModal(\'group\',\'' + esc(catName) + '\')">Kill group</button></div>';
         html += '<div class="group-table">';
-        html += '<div class="col-header"><span></span><span>Port</span><span>Process</span><span class="col-right">CPU</span><span class="col-right">Mem</span><span>PID</span><span></span><span></span><span></span></div>';
+        html += '<div class="col-header"><span></span><span>Port</span><span>Process</span><span class="col-right">CPU</span><span class="col-right">Mem</span><span class="col-right">PID</span><span></span><span></span><span></span></div>';
 
         for (var pi = 0; pi < items.length; pi++) {
           var p = items[pi], sel = state.selected[p.pid];
@@ -709,7 +723,7 @@ function render() {
           }
 
           html += '</div>';
-          html += '<div class="proc-cmd">' + esc(p.docker_container ? p.command + ' — ' + p.docker_container : p.command) + '</div>';
+          html += '<div class="proc-cmd">' + esc(p.docker_container ? p.exe_path + ' — ' + p.docker_container : p.exe_path) + '</div>';
           html += '</div>';
           html += '<span class="cpu-label">' + (p.cpu > 0 ? p.cpu.toFixed(1) + '%' : '-') + '</span>';
           html += '<span class="mem-label">' + (p.memory_mb > 0.1 ? p.memory_mb.toFixed(0) + 'M' : '-') + '</span>';
@@ -717,10 +731,10 @@ function render() {
           html += '<button class="copy-url-btn" onclick="event.stopPropagation();copyToClipboard(\'http://localhost:' + p.port + '\')" title="Copy URL (localhost:' + p.port + ')">';
           html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/></svg>';
           html += '</button>';
-          html += '<button class="copy-path-btn" onclick="event.stopPropagation();copyToClipboard(\'' + esc(p.command.split(' ')[0]) + '\')" title="Copy path (' + esc(p.command.split(' ')[0]) + ')">';
+          html += '<button class="copy-path-btn" onclick="event.stopPropagation();copyToClipboard(\'' + esc(p.exe_path || p.command) + '\')" title="Copy path (' + esc(p.exe_path || p.command) + ')">';
           html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/><path d="M8 9.5l1.5 1.5L8 12.5" stroke-width="1.2"/></svg>';
           html += '</button>';
-          html += '<button class="kill-single" onclick="event.stopPropagation();openModal(\'single\',null,' + p.pid + ')">&#10005;</button>';
+          html += '<button class="kill-single" onclick="event.stopPropagation();openModal(\'single\',null,' + p.pid + ')" title="Kill process (' + esc(p.process) + ' PID ' + p.pid + ')">&#10005;</button>';
           html += '</div>';
         }
         html += '</div></div>';
@@ -850,7 +864,7 @@ function freeConflict(port) {
   invokeCommand('free_port', { port: port, force: false }).then(function(r) {
     if (r.success && r.killed_pid) {
       showToast('Freed :' + port + ' (killed ' + r.killed_process + ')');
-      doSilentScan();
+      doScan();
     } else if (r.success) {
       showToast('Port ' + port + ' is already free');
     } else {
@@ -862,7 +876,7 @@ function freeConflict(port) {
 // ─── Tray events ────────────────────────────────────────────────────────────
 try {
   if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
-    window.__TAURI__.event.listen('tray-rescan', function() { doSilentScan(); });
+    window.__TAURI__.event.listen('tray-rescan', function() { doScan(); });
   }
 } catch(e) {}
 

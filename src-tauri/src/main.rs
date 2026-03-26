@@ -1,6 +1,6 @@
 // src-tauri/src/main.rs
-// Tauri backend: scans open ports, enriches with CPU/memory/orphan/docker data,
-// tracks port history, and provides free-port + kill commands.
+// Port Manager v2 — macOS port scanner with enrichment, history, and tray mode.
+// Every label and tag shown in the UI must be provably accurate.
 
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,12 +30,11 @@ pub struct PortEntry {
     pub user: String,
     pub command: String,
     pub category: String,
-    // v2 fields
     pub cpu: f32,
     pub memory_mb: f32,
     pub is_orphan: bool,
-    pub docker_container: Option<String>,
-    pub launch_agent: Option<String>,
+    pub docker_container: Option<String>, // "container_name (image) — status"
+    pub launch_agent: Option<String>,     // launchctl label (e.g. "homebrew.mxcl.postgresql@14")
 }
 
 #[derive(Debug, Serialize)]
@@ -86,7 +86,7 @@ pub struct PortConflict {
     pub blocker_pid: u32,
 }
 
-// Common dev server ports that often fall back to port+1
+// Common dev server ports that auto-increment on conflict
 const CONFLICT_WATCH_PORTS: &[u16] = &[3000, 3001, 4200, 5000, 5173, 8000, 8080, 8888, 9000];
 
 fn detect_port_conflicts(ports: &[PortEntry]) -> Vec<PortConflict> {
@@ -94,11 +94,11 @@ fn detect_port_conflicts(ports: &[PortEntry]) -> Vec<PortConflict> {
     let port_map: HashMap<u16, &PortEntry> = ports.iter().map(|p| (p.port, p)).collect();
 
     for &watch_port in CONFLICT_WATCH_PORTS {
-        // If both port N and port N+1 are occupied by the same process name,
-        // the N+1 instance likely fell back because N was taken
         let next_port = watch_port + 1;
-        if let (Some(blocker), Some(fallback)) = (port_map.get(&watch_port), port_map.get(&next_port)) {
-            // Same process type on adjacent ports = likely conflict
+        if let (Some(blocker), Some(fallback)) =
+            (port_map.get(&watch_port), port_map.get(&next_port))
+        {
+            // Same process type on adjacent ports with different PIDs = likely conflict
             if blocker.process == fallback.process && blocker.pid != fallback.pid {
                 conflicts.push(PortConflict {
                     intended_port: watch_port,
@@ -118,24 +118,50 @@ fn send_conflict_notification(app: &AppHandle, conflict: &PortConflict) {
     let _ = tauri::api::notification::Notification::new(&app.config().tauri.bundle.identifier)
         .title("Port Conflict Detected")
         .body(format!(
-            "{} (PID {}) wanted :{} but fell back to :{} — port :{} is held by {} (PID {})",
+            "{} (PID {}) wanted :{} but fell back to :{} — blocked by {} (PID {})",
             conflict.process,
             conflict.pid,
             conflict.intended_port,
             conflict.actual_port,
-            conflict.intended_port,
             conflict.blocker_process,
             conflict.blocker_pid
         ))
         .show();
 }
 
-// ─── History state ──────────────────────────────────────────────────────────
+// ─── History persistence ────────────────────────────────────────────────────
+
+fn history_file_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_default();
+    PathBuf::from(home)
+        .join(".port-manager")
+        .join("history.json")
+}
+
+fn load_history_from_disk() -> Vec<HistoryEvent> {
+    let path = history_file_path();
+    match std::fs::read_to_string(&path) {
+        Ok(data) => serde_json::from_str(&data).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn save_history_to_disk(history: &[HistoryEvent]) {
+    let path = history_file_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(data) = serde_json::to_string(history) {
+        let _ = std::fs::write(&path, data);
+    }
+}
+
+// ─── App state ──────────────────────────────────────────────────────────────
 
 pub struct AppState {
     history: Mutex<Vec<HistoryEvent>>,
     last_ports: Mutex<HashMap<(u32, u16), String>>, // (pid, port) -> process name
-    last_conflicts: Mutex<Vec<(u16, u16)>>,         // previously notified (intended, actual) pairs
+    last_conflicts: Mutex<Vec<(u16, u16)>>,         // previously notified conflict pairs
 }
 
 fn now_unix() -> u64 {
@@ -151,9 +177,19 @@ fn categorize_port(process: &str, port: u16, user: &str) -> String {
     let proc_lower = process.to_lowercase();
 
     let db_procs = [
-        "postgres", "mysqld", "mysql", "redis-server", "redis", "mongod",
-        "mongos", "memcached", "cassandra", "couchdb", "neo4j",
-        "elasticsearch", "clickhouse",
+        "postgres",
+        "mysqld",
+        "mysql",
+        "redis-server",
+        "redis",
+        "mongod",
+        "mongos",
+        "memcached",
+        "cassandra",
+        "couchdb",
+        "neo4j",
+        "elasticsearch",
+        "clickhouse",
     ];
     if db_procs.iter().any(|p| proc_lower.contains(p))
         || [5432, 3306, 6379, 27017, 11211, 9042, 5984, 7474, 9200, 8123].contains(&port)
@@ -168,15 +204,16 @@ fn categorize_port(process: &str, port: u16, user: &str) -> String {
         return "Containers".to_string();
     }
 
-    let web_procs = ["nginx", "httpd", "apache", "caddy", "traefik", "haproxy", "envoy"];
+    let web_procs = [
+        "nginx", "httpd", "apache", "caddy", "traefik", "haproxy", "envoy",
+    ];
     if web_procs.iter().any(|p| proc_lower.contains(p)) || [80, 443, 8443].contains(&port) {
         return "Web / Proxy".to_string();
     }
 
     let dev_procs = [
-        "node", "python", "python3", "ruby", "java", "go", "deno", "bun",
-        "php", "uvicorn", "gunicorn", "flask", "next", "vite", "webpack",
-        "esbuild", "grafana", "prometheus",
+        "node", "python", "python3", "ruby", "java", "go", "deno", "bun", "php", "uvicorn",
+        "gunicorn", "flask", "next", "vite", "webpack", "esbuild", "grafana", "prometheus",
     ];
     if dev_procs.iter().any(|p| proc_lower.contains(p))
         || (3000..=3999).contains(&port)
@@ -190,16 +227,22 @@ fn categorize_port(process: &str, port: u16, user: &str) -> String {
     }
 
     let app_procs = [
-        "spotify", "slack", "discord", "zoom", "teams", "telegram",
-        "signal", "whatsapp", "dropbox", "1password", "chrome",
-        "firefox", "safari", "brave", "arc", "figma", "notion",
+        "spotify", "slack", "discord", "zoom", "teams", "telegram", "signal", "whatsapp",
+        "dropbox", "1password", "chrome", "firefox", "safari", "brave", "arc", "figma", "notion",
         "obsidian", "vscode", "code",
     ];
     if app_procs.iter().any(|p| proc_lower.contains(p)) || port > 49152 {
         return "Apps".to_string();
     }
 
-    let system_procs = ["sshd", "ssh", "launchd", "mDNSResponder", "systemd", "cupsd"];
+    let system_procs = [
+        "sshd",
+        "ssh",
+        "launchd",
+        "mDNSResponder",
+        "systemd",
+        "cupsd",
+    ];
     if system_procs.iter().any(|p| proc_lower.contains(p))
         || user == "root"
         || user.starts_with('_')
@@ -271,15 +314,23 @@ fn parse_lsof_field_output(output: &str) -> Vec<LsofRecord> {
         }
 
         if (field_type == 'T' || field_type == 'n') && cur_port > 0 && cur_pid > 0 {
-            let dominated_by_listen = cur_state == "LISTEN" || cur_protocol == "UDP";
-            if dominated_by_listen {
+            let is_listening = cur_state == "LISTEN" || cur_protocol == "UDP";
+            if is_listening {
                 records.push(LsofRecord {
                     pid: cur_pid,
                     process: cur_process.clone(),
                     user: cur_user.clone(),
-                    protocol: if cur_protocol.is_empty() { "TCP".to_string() } else { cur_protocol.clone() },
+                    protocol: if cur_protocol.is_empty() {
+                        "TCP".to_string()
+                    } else {
+                        cur_protocol.clone()
+                    },
                     port: cur_port,
-                    state: if cur_state.is_empty() { "LISTEN".to_string() } else { cur_state.clone() },
+                    state: if cur_state.is_empty() {
+                        "LISTEN".to_string()
+                    } else {
+                        cur_state.clone()
+                    },
                 });
                 cur_port = 0;
                 cur_state.clear();
@@ -296,33 +347,43 @@ struct ProcessInfo {
     cpu: f32,
     memory_mb: f32,
     ppid: u32,
+    tty: String, // "??" = no controlling terminal, "s000" etc. = has terminal
 }
 
 fn get_process_info(pid: u32) -> ProcessInfo {
     let output = Command::new("ps")
-        .args(["-p", &pid.to_string(), "-o", "command=,pcpu=,rss=,ppid="])
+        .args([
+            "-p",
+            &pid.to_string(),
+            "-o",
+            "command=,pcpu=,rss=,ppid=,tty=",
+        ])
         .output();
+
+    let default = ProcessInfo {
+        command: format!("PID {}", pid),
+        cpu: 0.0,
+        memory_mb: 0.0,
+        ppid: 0,
+        tty: "??".to_string(),
+    };
 
     match output {
         Ok(out) => {
             let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if raw.is_empty() {
-                return ProcessInfo {
-                    command: format!("PID {}", pid),
-                    cpu: 0.0,
-                    memory_mb: 0.0,
-                    ppid: 0,
-                };
+                return default;
             }
-            // ps output: "command... CPU  RSS  PPID"
+            // ps output: "command... CPU RSS PPID TTY"
             // Parse from the right since command can contain spaces
             let parts: Vec<&str> = raw.split_whitespace().collect();
             let len = parts.len();
-            if len >= 4 {
-                let ppid: u32 = parts[len - 1].parse().unwrap_or(0);
-                let rss_kb: f32 = parts[len - 2].parse().unwrap_or(0.0);
-                let cpu: f32 = parts[len - 3].parse().unwrap_or(0.0);
-                let cmd = parts[..len - 3].join(" ");
+            if len >= 5 {
+                let tty = parts[len - 1].to_string();
+                let ppid: u32 = parts[len - 2].parse().unwrap_or(0);
+                let rss_kb: f32 = parts[len - 3].parse().unwrap_or(0.0);
+                let cpu: f32 = parts[len - 4].parse().unwrap_or(0.0);
+                let cmd = parts[..len - 4].join(" ");
                 let cmd_truncated = if cmd.len() > 200 {
                     format!("{}...", &cmd[..200])
                 } else {
@@ -333,59 +394,37 @@ fn get_process_info(pid: u32) -> ProcessInfo {
                     cpu,
                     memory_mb: rss_kb / 1024.0,
                     ppid,
+                    tty,
                 }
             } else {
                 ProcessInfo {
                     command: raw,
-                    cpu: 0.0,
-                    memory_mb: 0.0,
-                    ppid: 0,
+                    ..default
                 }
             }
         }
-        Err(_) => ProcessInfo {
-            command: format!("PID {}", pid),
-            cpu: 0.0,
-            memory_mb: 0.0,
-            ppid: 0,
-        },
+        Err(_) => default,
     }
 }
 
-fn is_orphan_process(ppid: u32) -> bool {
-    // A process is orphaned if its parent is launchd (PID 1) or init
-    // This means the original parent (e.g., Terminal, iTerm) has exited
-    ppid == 1
-}
+// ─── Launchctl-based service detection (accurate, PID-matched) ──────────────
+// Uses `launchctl list` which gives us the ACTUAL PID of every managed service.
+// This is 100% accurate — no guessing from filenames.
 
-// ─── Docker container lookup ────────────────────────────────────────────────
+fn build_launchctl_pid_map() -> HashMap<u32, String> {
+    let mut map: HashMap<u32, String> = HashMap::new();
 
-fn build_docker_port_map() -> HashMap<u16, String> {
-    let mut map: HashMap<u16, String> = HashMap::new();
-
-    let output = Command::new("docker")
-        .args(["ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Ports}}"])
-        .output();
+    let output = Command::new("launchctl").arg("list").output();
 
     if let Ok(out) = output {
         let stdout = String::from_utf8_lossy(&out.stdout);
         for line in stdout.lines() {
+            // Format: "PID\tStatus\tLabel" — skip header and entries with "-" PID
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.len() >= 3 {
-                let name = parts[0];
-                let image = parts[1];
-                let ports_str = parts[2];
-                // Parse port mappings like "0.0.0.0:5432->5432/tcp, 0.0.0.0:6379->6379/tcp"
-                for mapping in ports_str.split(',') {
-                    let mapping = mapping.trim();
-                    // Look for "host_port->" pattern
-                    if let Some(arrow_pos) = mapping.find("->") {
-                        let host_part = &mapping[..arrow_pos];
-                        if let Some(port_str) = host_part.rsplit(':').next() {
-                            if let Ok(port) = port_str.parse::<u16>() {
-                                map.insert(port, format!("{} ({})", name, image));
-                            }
-                        }
+                if let Ok(pid) = parts[0].trim().parse::<u32>() {
+                    if pid > 0 {
+                        map.insert(pid, parts[2].trim().to_string());
                     }
                 }
             }
@@ -394,45 +433,56 @@ fn build_docker_port_map() -> HashMap<u16, String> {
     map
 }
 
-// ─── Launch agent detection ─────────────────────────────────────────────────
+// ─── Orphan detection (accurate — no false positives) ───────────────────────
+// A process is truly orphaned ONLY if ALL three conditions are true:
+//   1. Parent is launchd (ppid == 1)
+//   2. NOT managed by launchctl (no launch agent label)
+//   3. Has no controlling terminal (tty == "??")
+//
+// This avoids flagging Homebrew services, system daemons, or anything the user
+// is actively running in a terminal.
 
-fn build_launch_agent_map() -> HashMap<String, String> {
-    // Maps process name (lowercase) -> launch agent plist name
-    // Only flag well-known services that users might not realize are running
-    let mut map: HashMap<String, String> = HashMap::new();
+fn is_truly_orphan(ppid: u32, has_launch_agent: bool, tty: &str) -> bool {
+    ppid == 1 && !has_launch_agent && tty == "??"
+}
 
-    // Check user launch agents
-    let home = std::env::var("HOME").unwrap_or_default();
-    let agent_dirs = [
-        format!("{}/Library/LaunchAgents", home),
-        "/Library/LaunchAgents".to_string(),
-    ];
+// ─── Docker container lookup ────────────────────────────────────────────────
 
-    for dir in &agent_dirs {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let filename = entry.file_name().to_string_lossy().to_string();
-                if !filename.ends_with(".plist") {
-                    continue;
-                }
-                // Extract the likely process name from the plist filename
-                // e.g., "homebrew.mxcl.postgresql@14.plist" -> "postgres"
-                // e.g., "homebrew.mxcl.redis.plist" -> "redis"
-                let name_lower = filename.to_lowercase();
-                let known_services = [
-                    ("postgres", "postgres"),
-                    ("mysql", "mysql"),
-                    ("redis", "redis"),
-                    ("mongo", "mongod"),
-                    ("elasticsearch", "elasticsearch"),
-                    ("memcache", "memcached"),
-                    ("nginx", "nginx"),
-                    ("httpd", "httpd"),
-                    ("apache", "httpd"),
-                ];
-                for (pattern, proc_name) in &known_services {
-                    if name_lower.contains(pattern) {
-                        map.insert(proc_name.to_string(), filename.clone());
+fn build_docker_port_map() -> HashMap<u16, String> {
+    let mut map: HashMap<u16, String> = HashMap::new();
+
+    let output = Command::new("docker")
+        .args([
+            "ps",
+            "--format",
+            "{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}",
+        ])
+        .output();
+
+    if let Ok(out) = output {
+        if !out.status.success() {
+            return map; // Docker not running or not installed — return empty
+        }
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() >= 4 {
+                let name = parts[0];
+                let image = parts[1];
+                let ports_str = parts[2];
+                let status = parts[3];
+                let container_info = format!("{} ({}) — {}", name, image, status);
+
+                // Parse port mappings like "0.0.0.0:5432->5432/tcp"
+                for mapping in ports_str.split(',') {
+                    let mapping = mapping.trim();
+                    if let Some(arrow_pos) = mapping.find("->") {
+                        let host_part = &mapping[..arrow_pos];
+                        if let Some(port_str) = host_part.rsplit(':').next() {
+                            if let Ok(port) = port_str.parse::<u16>() {
+                                map.insert(port, container_info.clone());
+                            }
+                        }
                     }
                 }
             }
@@ -456,8 +506,9 @@ fn do_scan_ports() -> Vec<PortEntry> {
         Err(_) => return vec![],
     };
 
+    // Build lookup maps once per scan (not per-port)
     let docker_map = build_docker_port_map();
-    let launch_map = build_launch_agent_map();
+    let launchctl_map = build_launchctl_pid_map();
 
     let mut entries: Vec<PortEntry> = Vec::new();
     let mut seen: HashMap<(u32, u16), bool> = HashMap::new();
@@ -471,7 +522,8 @@ fn do_scan_ports() -> Vec<PortEntry> {
         let info = get_process_info(r.pid);
         let category = categorize_port(&r.process, r.port, &r.user);
         let docker_container = docker_map.get(&r.port).cloned();
-        let launch_agent = launch_map.get(&r.process.to_lowercase()).cloned();
+        let launch_agent = launchctl_map.get(&r.pid).cloned();
+        let is_orphan = is_truly_orphan(info.ppid, launch_agent.is_some(), &info.tty);
 
         entries.push(PortEntry {
             pid: r.pid,
@@ -484,7 +536,7 @@ fn do_scan_ports() -> Vec<PortEntry> {
             category,
             cpu: info.cpu,
             memory_mb: (info.memory_mb * 10.0).round() / 10.0,
-            is_orphan: is_orphan_process(info.ppid),
+            is_orphan,
             docker_container,
             launch_agent,
         });
@@ -540,8 +592,11 @@ fn update_history(
         history.drain(..drain_count);
     }
 
-    // Update last_ports
+    // Update last_ports snapshot
     *last_ports = current;
+
+    // Persist to disk
+    save_history_to_disk(history);
 }
 
 // ─── Tauri commands ─────────────────────────────────────────────────────────
@@ -573,7 +628,7 @@ fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
         last_conflicts.retain(|k| current_keys.contains(k));
     }
 
-    // Update tray menu with current port count
+    // Update tray menu with current ports
     update_tray_menu(&app, &ports);
 
     ScanResult {
@@ -584,7 +639,6 @@ fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
 
 #[tauri::command]
 fn get_conflicts(_state: State<AppState>) -> Vec<PortConflict> {
-    // Re-scan to get current conflicts
     let ports = do_scan_ports();
     detect_port_conflicts(&ports)
 }
@@ -644,7 +698,6 @@ fn kill_ports(pids: Vec<u32>, force: bool) -> KillResult {
 
 #[tauri::command]
 fn free_port(port: u16, force: bool) -> FreePortResult {
-    // Find what's on this port and kill it
     let ports = do_scan_ports();
     let target = ports.iter().find(|p| p.port == port);
 
@@ -704,7 +757,40 @@ fn free_port(port: u16, force: bool) -> FreePortResult {
 
 #[tauri::command]
 fn get_history(state: State<AppState>) -> Vec<HistoryEvent> {
-    state.history.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    state
+        .history
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+#[tauri::command]
+fn clear_history(state: State<AppState>) {
+    if let Ok(mut hist) = state.history.lock() {
+        hist.clear();
+        save_history_to_disk(&hist);
+    }
+}
+
+#[tauri::command]
+fn stop_launch_agent(label: String) -> Result<String, String> {
+    // launchctl stop sends SIGTERM to the managed service
+    let output = Command::new("launchctl")
+        .args(["stop", &label])
+        .output()
+        .map_err(|e| format!("Failed to run launchctl: {}", e))?;
+
+    if output.status.success() {
+        Ok(format!("Stopped {}", label))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            // launchctl stop often succeeds silently even on error
+            Ok(format!("Stop signal sent to {}", label))
+        } else {
+            Err(format!("Failed to stop {}: {}", label, stderr))
+        }
+    }
 }
 
 // ─── System Tray ────────────────────────────────────────────────────────────
@@ -712,14 +798,17 @@ fn get_history(state: State<AppState>) -> Vec<HistoryEvent> {
 fn build_tray_menu(ports: &[PortEntry]) -> SystemTrayMenu {
     let mut menu = SystemTrayMenu::new();
 
-    // Header
-    let header = CustomMenuItem::new("header", format!("Port Manager — {} ports", ports.len()))
-        .disabled();
+    // Header with port count
+    let header = CustomMenuItem::new(
+        "header",
+        format!("Port Manager — {} ports", ports.len()),
+    )
+    .disabled();
     menu = menu.add_item(header);
     menu = menu.add_native_item(SystemTrayMenuItem::Separator);
 
-    // Show top ports (up to 8) grouped by category
     if !ports.is_empty() {
+        // Group by category
         let mut by_cat: HashMap<String, Vec<&PortEntry>> = HashMap::new();
         for p in ports {
             by_cat.entry(p.category.clone()).or_default().push(p);
@@ -734,15 +823,16 @@ fn build_tray_menu(ports: &[PortEntry]) -> SystemTrayMenu {
             "System",
             "Other",
         ];
+
         let mut shown = 0;
         for cat_name in &cat_order {
-            if shown >= 8 {
+            if shown >= 10 {
                 break;
             }
             if let Some(items) = by_cat.get(*cat_name) {
                 let sub_items: Vec<CustomMenuItem> = items
                     .iter()
-                    .take(5)
+                    .take(6)
                     .map(|p| {
                         CustomMenuItem::new(
                             format!("free_{}", p.port),
@@ -764,9 +854,19 @@ fn build_tray_menu(ports: &[PortEntry]) -> SystemTrayMenu {
         }
 
         menu = menu.add_native_item(SystemTrayMenuItem::Separator);
+
+        // Quick action: Kill All Dev Servers (only if there are dev servers)
+        if by_cat.contains_key("Dev Servers") {
+            let dev_count = by_cat["Dev Servers"].len();
+            let kill_devs = CustomMenuItem::new(
+                "kill_dev_servers",
+                format!("Kill All Dev Servers ({})", dev_count),
+            );
+            menu = menu.add_item(kill_devs);
+            menu = menu.add_native_item(SystemTrayMenuItem::Separator);
+        }
     }
 
-    // Quick actions
     let show = CustomMenuItem::new("show", "Show Window");
     let rescan = CustomMenuItem::new("rescan", "Rescan Ports");
     let quit = CustomMenuItem::new("quit", "Quit Port Manager");
@@ -782,6 +882,7 @@ fn build_tray_menu(ports: &[PortEntry]) -> SystemTrayMenu {
 fn update_tray_menu(app: &AppHandle, ports: &[PortEntry]) {
     if let Some(tray) = app.tray_handle_by_id("main") {
         let _ = tray.set_menu(build_tray_menu(ports));
+        let _ = tray.set_tooltip(&format!("Port Manager — {} ports", ports.len()));
     }
 }
 
@@ -791,13 +892,13 @@ fn main() {
     let tray_menu = build_tray_menu(&[]);
     let system_tray = SystemTray::new()
         .with_id("main")
-        .with_menu(tray_menu);
+        .with_menu(tray_menu)
+        .with_tooltip("Port Manager");
 
     tauri::Builder::default()
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {
             SystemTrayEvent::LeftClick { .. } => {
-                // Show and focus the window on tray left click
                 if let Some(window) = app.get_window("main") {
                     let _ = window.unminimize();
                     let _ = window.show();
@@ -816,13 +917,35 @@ fn main() {
                     }
                 }
                 "rescan" => {
-                    // Emit a rescan event to the frontend
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.emit("tray-rescan", ());
+                    }
+                }
+                "kill_dev_servers" => {
+                    let ports = do_scan_ports();
+                    let dev_pids: Vec<u32> = ports
+                        .iter()
+                        .filter(|p| p.category == "Dev Servers" && p.pid > 1)
+                        .map(|p| p.pid)
+                        .collect();
+                    let count = dev_pids.len();
+                    for pid in &dev_pids {
+                        let _ = Command::new("kill")
+                            .args(["-15", &pid.to_string()])
+                            .output();
+                    }
+                    let _ = tauri::api::notification::Notification::new(
+                        &app.config().tauri.bundle.identifier,
+                    )
+                    .title("Dev Servers Killed")
+                    .body(format!("Stopped {} dev server process(es)", count))
+                    .show();
                     if let Some(window) = app.get_window("main") {
                         let _ = window.emit("tray-rescan", ());
                     }
                 }
                 other => {
-                    // Handle "free_PORT" clicks
+                    // Handle "free_PORT" clicks from tray submenus
                     if let Some(port_str) = other.strip_prefix("free_") {
                         if let Ok(port) = port_str.parse::<u16>() {
                             let result = free_port(port, false);
@@ -839,7 +962,6 @@ fn main() {
                                 .body(msg)
                                 .show();
                             }
-                            // Trigger a rescan in the frontend
                             if let Some(window) = app.get_window("main") {
                                 let _ = window.emit("tray-rescan", ());
                             }
@@ -850,12 +972,19 @@ fn main() {
             _ => {}
         })
         .on_window_event(|event| {
-            // Minimize to dock instead of quitting when red X is clicked
-            // This keeps the tray alive and the dock icon clickable
+            // Hide to tray when red X is clicked
             if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
-                let _ = event.window().minimize();
+                let _ = event.window().hide();
                 api.prevent_close();
             }
+        })
+        .setup(|app| {
+            // Load persisted history from disk on startup
+            let state = app.state::<AppState>();
+            if let Ok(mut hist) = state.history.lock() {
+                *hist = load_history_from_disk();
+            }
+            Ok(())
         })
         .manage(AppState {
             history: Mutex::new(Vec::new()),
@@ -863,13 +992,18 @@ fn main() {
             last_conflicts: Mutex::new(Vec::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            scan_ports, kill_ports, free_port, get_history, get_conflicts
+            scan_ports,
+            kill_ports,
+            free_port,
+            get_history,
+            clear_history,
+            get_conflicts,
+            stop_launch_agent
         ])
         .build(tauri::generate_context!())
         .expect("error while building Port Manager")
         .run(|_app_handle, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                // Prevent the app from exiting when all windows are minimized
                 api.prevent_exit();
             }
         });

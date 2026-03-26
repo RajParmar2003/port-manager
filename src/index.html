@@ -162,7 +162,9 @@
     .proc-name { font-size: 13px; font-weight: 600; }
     .proc-cmd { font-size: 11px; color: var(--text-dim); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
     .proc-meta { display: flex; gap: 4px; align-items: center; margin-top: 2px; }
-    .meta-tag { font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600; }
+    .meta-tag { font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600; cursor: default; }
+    .meta-tag-clickable { cursor: pointer; }
+    .meta-tag-clickable:hover { opacity: 0.8; }
     .pid-label { font-size: 11.5px; color: var(--text-dim); font-family: var(--mono); }
     .cpu-label { font-size: 11px; color: var(--text-dim); font-family: var(--mono); text-align: right; }
     .mem-label { font-size: 11px; color: var(--text-dim); font-family: var(--mono); text-align: right; }
@@ -196,13 +198,21 @@
 
     /* History view */
     .history-list { padding: 16px 24px 90px; }
+    .history-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+    .history-search {
+      flex: 1; padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      font-size: 12px; font-family: var(--sans); outline: none;
+    }
+    .history-search:focus { border-color: var(--accent); }
+    .history-search::placeholder { color: var(--text-dim); }
     .history-item {
       display: flex; align-items: center; gap: 12px; padding: 10px 14px;
       border-bottom: 1px solid var(--border); font-size: 13px;
     }
     .history-item:last-child { border-bottom: none; }
     .history-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .history-time { font-family: var(--mono); font-size: 11px; color: var(--text-dim); min-width: 60px; }
+    .history-time { font-family: var(--mono); font-size: 11px; color: var(--text-dim); min-width: 70px; }
     .history-port { font-family: var(--mono); font-weight: 600; min-width: 55px; }
     .history-proc { color: var(--text-dim); }
 
@@ -214,7 +224,7 @@
     }
     .modal {
       background: var(--surface); border-radius: 16px; padding: 26px 30px;
-      width: 420px; max-width: 90vw; box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+      width: 440px; max-width: 90vw; box-shadow: 0 24px 80px rgba(0,0,0,0.4);
       border: 1px solid var(--border); animation: modalIn 0.2s ease;
     }
     .modal h3 { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
@@ -230,6 +240,11 @@
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
     .modal .force-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 12.5px; color: var(--text-dim); }
     .modal .force-toggle input { accent-color: var(--red); }
+    .modal-warning {
+      padding: 8px 12px; border-radius: 8px; margin-bottom: 14px;
+      background: rgba(245,158,66,0.1); border: 1px solid rgba(245,158,66,0.2);
+      font-size: 12px; color: var(--orange); line-height: 1.5;
+    }
 
     .toast {
       position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%);
@@ -322,7 +337,7 @@ function toggleTheme() {
   render();
 }
 
-// Clipboard (Tauri v1 clipboard API or fallback)
+// Clipboard
 function copyToClipboard(text) {
   try {
     if (window.__TAURI__ && window.__TAURI__.clipboard) {
@@ -339,15 +354,15 @@ function copyToClipboard(text) {
 function invokeCommand(cmd, args) {
   if (!args) args = {};
   if (IS_TAURI) { return tauriInvoke(cmd, args); }
-  // Mock fallback
+  // Mock fallback for browser preview
   if (cmd === 'scan_ports') {
     return new Promise(function(resolve) {
       setTimeout(function() {
         resolve({ ports: [
           { pid: 1201, process: "node", port: 3000, protocol: "TCP", state: "LISTEN", user: "you", command: "node next dev", category: "Dev Servers", cpu: 2.3, memory_mb: 145.2, is_orphan: false, docker_container: null, launch_agent: null },
           { pid: 1202, process: "node", port: 3001, protocol: "TCP", state: "LISTEN", user: "you", command: "node next dev", category: "Dev Servers", cpu: 0.1, memory_mb: 98.0, is_orphan: true, docker_container: null, launch_agent: null },
-          { pid: 502, process: "postgres", port: 5432, protocol: "TCP", state: "LISTEN", user: "_postgres", command: "/usr/local/opt/postgresql/bin/postgres", category: "Databases", cpu: 0.0, memory_mb: 22.4, is_orphan: false, docker_container: null, launch_agent: "homebrew.mxcl.postgresql@14.plist" },
-          { pid: 503, process: "redis-server", port: 6379, protocol: "TCP", state: "LISTEN", user: "you", command: "redis-server *:6379", category: "Databases", cpu: 0.1, memory_mb: 3.2, is_orphan: false, docker_container: "my-redis (redis:7)", launch_agent: null },
+          { pid: 502, process: "postgres", port: 5432, protocol: "TCP", state: "LISTEN", user: "_postgres", command: "/usr/local/opt/postgresql/bin/postgres", category: "Databases", cpu: 0.0, memory_mb: 22.4, is_orphan: false, docker_container: null, launch_agent: "homebrew.mxcl.postgresql@14" },
+          { pid: 503, process: "redis-server", port: 6379, protocol: "TCP", state: "LISTEN", user: "you", command: "redis-server *:6379", category: "Databases", cpu: 0.1, memory_mb: 3.2, is_orphan: false, docker_container: "my-redis (redis:7) — Up 2 hours", launch_agent: null },
           { pid: 700, process: "nginx", port: 80, protocol: "TCP", state: "LISTEN", user: "root", command: "nginx: master", category: "Web / Proxy", cpu: 0.0, memory_mb: 5.1, is_orphan: false, docker_container: null, launch_agent: null },
           { pid: 1500, process: "sshd", port: 22, protocol: "TCP", state: "LISTEN", user: "root", command: "sshd", category: "System", cpu: 0.0, memory_mb: 1.8, is_orphan: false, docker_container: null, launch_agent: null }
         ], error: null });
@@ -369,12 +384,19 @@ function invokeCommand(cmd, args) {
     return new Promise(function(resolve) {
       var ts = Math.floor(Date.now() / 1000);
       resolve([
+        { timestamp: ts - 7200, event_type: "opened", port: 5432, pid: 502, process: "postgres" },
         { timestamp: ts - 300, event_type: "opened", port: 3000, pid: 1201, process: "node" },
-        { timestamp: ts - 120, event_type: "opened", port: 5432, pid: 502, process: "postgres" },
+        { timestamp: ts - 120, event_type: "opened", port: 6379, pid: 503, process: "redis-server" },
         { timestamp: ts - 60, event_type: "closed", port: 8080, pid: 999, process: "python3" },
         { timestamp: ts - 10, event_type: "opened", port: 3001, pid: 1202, process: "node" }
       ]);
     });
+  }
+  if (cmd === 'clear_history') {
+    return new Promise(function(resolve) { resolve(null); });
+  }
+  if (cmd === 'stop_launch_agent') {
+    return new Promise(function(resolve) { setTimeout(function() { resolve("Stopped " + args.label); }, 300); });
   }
   return Promise.resolve(null);
 }
@@ -394,7 +416,8 @@ var CATEGORIES = {
 var state = {
   ports: [], selected: {}, search: '', filterCat: 'All',
   scanning: false, modal: null, toast: null, toastTimer: null,
-  freePortValue: '', view: 'ports', history: [], conflicts: []
+  freePortValue: '', view: 'ports', history: [], conflicts: [],
+  historySearch: ''
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -410,6 +433,28 @@ function showToast(message, type) {
   render();
   state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2800);
 }
+function relativeTime(ts) {
+  var now = Math.floor(Date.now() / 1000);
+  var diff = now - ts;
+  if (diff < 0) return 'just now';
+  if (diff < 10) return 'just now';
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+function formatTime(ts) {
+  var d = new Date(ts * 1000);
+  var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function extractContainerName(dockerStr) {
+  // docker_container format: "container_name (image) — status"
+  if (!dockerStr) return '';
+  var paren = dockerStr.indexOf('(');
+  if (paren > 0) return dockerStr.substring(0, paren).trim();
+  return dockerStr;
+}
 function getFiltered() {
   return state.ports.filter(function(p) {
     if (state.filterCat !== 'All' && p.category !== state.filterCat) return false;
@@ -423,10 +468,12 @@ function getFiltered() {
 function getGrouped(filtered) { var g = {}; for (var i = 0; i < filtered.length; i++) { var p = filtered[i]; if (!g[p.category]) g[p.category] = []; g[p.category].push(p); } return g; }
 function getCatCounts() { var c = {}; for (var i = 0; i < state.ports.length; i++) { c[state.ports[i].category] = (c[state.ports[i].category] || 0) + 1; } return c; }
 function getSelectedPorts() { return state.ports.filter(function(p) { return state.selected[p.pid]; }); }
-function formatTime(ts) {
-  var d = new Date(ts * 1000);
-  var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
-  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+function getFilteredHistory() {
+  if (!state.historySearch) return state.history;
+  var s = state.historySearch.toLowerCase();
+  return state.history.filter(function(ev) {
+    return String(ev.port).indexOf(s) !== -1 || ev.process.toLowerCase().indexOf(s) !== -1;
+  });
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────
@@ -500,6 +547,21 @@ function loadHistory() {
     state.history = h || [];
     render();
   });
+}
+
+function doClearHistory() {
+  invokeCommand('clear_history').then(function() {
+    state.history = [];
+    showToast('History cleared');
+    render();
+  }).catch(function(e) { showToast('Clear failed: ' + e, 'error'); });
+}
+
+function stopAgent(label) {
+  invokeCommand('stop_launch_agent', { label: label }).then(function(msg) {
+    showToast(msg || 'Stop signal sent');
+    setTimeout(doSilentScan, 1000); // rescan after a beat to see if it stopped
+  }).catch(function(e) { showToast('Stop failed: ' + e, 'error'); });
 }
 
 // ─── Render ────────────────────────────────────────────────────────────────
@@ -610,10 +672,19 @@ function render() {
           html += '<div class="checkbox' + (sel ? ' checked' : '') + '" onclick="event.stopPropagation();toggleSelect(' + p.pid + ')">' + (sel ? '&#10003;' : '') + '</div>';
           html += '<span class="port-num" style="color:' + catInfo.color + '">:' + p.port + '</span>';
           html += '<div style="min-width:0"><div class="proc-name">' + esc(p.process);
-          // Tags
-          if (p.is_orphan) html += ' <span class="meta-tag" style="background:' + rgbaFrom('#f59e42', 0.15) + ';color:var(--orange)">orphan</span>';
-          if (p.docker_container) html += ' <span class="meta-tag" style="background:' + rgbaFrom('#a78bfa', 0.15) + ';color:#a78bfa">docker</span>';
-          if (p.launch_agent) html += ' <span class="meta-tag" style="background:' + rgbaFrom('#94a3b8', 0.15) + ';color:#94a3b8">auto-start</span>';
+
+          // Tags — only shown when provably accurate
+          if (p.is_orphan) {
+            html += ' <span class="meta-tag" style="background:' + rgbaFrom('#ef4444', 0.12) + ';color:var(--red)" title="No parent process, no controlling terminal, not managed by launchd">orphan</span>';
+          }
+          if (p.docker_container) {
+            var cname = extractContainerName(p.docker_container);
+            html += ' <span class="meta-tag" style="background:' + rgbaFrom('#a78bfa', 0.15) + ';color:#a78bfa" title="' + esc(p.docker_container) + '">' + esc(cname) + '</span>';
+          }
+          if (p.launch_agent) {
+            html += ' <span class="meta-tag meta-tag-clickable" style="background:' + rgbaFrom('#60a5fa', 0.12) + ';color:#60a5fa" title="Managed by launchd: ' + esc(p.launch_agent) + '. Click to stop." onclick="event.stopPropagation();stopAgent(\'' + esc(p.launch_agent) + '\')">managed</span>';
+          }
+
           html += '</div>';
           html += '<div class="proc-cmd">' + esc(p.docker_container ? p.command + ' — ' + p.docker_container : p.command) + '</div>';
           html += '</div>';
@@ -632,17 +703,31 @@ function render() {
   } else {
     // History view
     html += '<div class="history-list">';
-    if (state.history.length === 0) {
-      html += '<div class="empty"><div class="empty-icon">&#128203;</div><p>No history yet. Events appear as ports open and close.</p></div>';
+    html += '<div class="history-toolbar">';
+    html += '<input class="history-search" type="text" placeholder="Filter by port or process..." value="' + esc(state.historySearch) + '" oninput="onHistorySearch(this.value)" />';
+    if (state.history.length > 0) {
+      html += '<button class="btn btn-sm btn-surface" onclick="doClearHistory()">Clear</button>';
+    }
+    html += '</div>';
+
+    var filteredHistory = getFilteredHistory();
+    if (filteredHistory.length === 0) {
+      html += '<div class="empty"><div class="empty-icon">&#128203;</div>';
+      if (state.historySearch) {
+        html += '<p>No history events match "' + esc(state.historySearch) + '"</p>';
+      } else {
+        html += '<p>No history yet. Events appear as ports open and close.</p>';
+      }
+      html += '</div>';
     } else {
       html += '<div class="group-table">';
       // Show newest first
-      for (var hi = state.history.length - 1; hi >= 0; hi--) {
-        var ev = state.history[hi];
+      for (var hi = filteredHistory.length - 1; hi >= 0; hi--) {
+        var ev = filteredHistory[hi];
         var isOpen = ev.event_type === 'opened';
         html += '<div class="history-item">';
         html += '<div class="history-dot" style="background:' + (isOpen ? 'var(--green)' : 'var(--red)') + '"></div>';
-        html += '<span class="history-time">' + formatTime(ev.timestamp) + '</span>';
+        html += '<span class="history-time" title="' + formatTime(ev.timestamp) + '">' + relativeTime(ev.timestamp) + '</span>';
         html += '<span class="history-port" style="color:' + (isOpen ? 'var(--green)' : 'var(--red)') + '">:' + ev.port + '</span>';
         html += '<span>' + (isOpen ? 'opened' : 'closed') + '</span>';
         html += '<span class="history-proc">' + esc(ev.process) + ' (PID ' + ev.pid + ')</span>';
@@ -661,15 +746,28 @@ function render() {
   // Modal
   if (state.modal) {
     var targets = state.modal.targets;
+    var hasManagedTargets = targets.some(function(t) { return t.launch_agent; });
+
     html += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">';
     html += '<h3>Kill ' + targets.length + ' port' + (targets.length > 1 ? 's' : '') + '?</h3>';
     html += '<p>This will send <code style="background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px">' + (state.modal.force ? 'SIGKILL (-9)' : 'SIGTERM (-15)') + '</code> to:</p>';
     html += '<div class="modal-list">';
     for (var mi = 0; mi < targets.length; mi++) {
       var t = targets[mi];
-      html += '<div class="modal-list-item"><span class="ml-name">' + esc(t.process) + '</span><span class="ml-detail">PID ' + t.pid + ' &rarr; :' + t.port + '</span></div>';
+      html += '<div class="modal-list-item"><span class="ml-name">' + esc(t.process);
+      if (t.launch_agent) html += ' <span style="color:#60a5fa;font-size:10px">(managed)</span>';
+      html += '</span><span class="ml-detail">PID ' + t.pid + ' &rarr; :' + t.port + '</span></div>';
     }
     html += '</div>';
+
+    // Warning for managed services
+    if (hasManagedTargets) {
+      html += '<div class="modal-warning">';
+      html += '&#9888; Some processes are managed by launchd and may auto-restart after being killed. ';
+      html += 'Use the <strong>managed</strong> tag in the port list to properly stop them.';
+      html += '</div>';
+    }
+
     html += '<div class="force-toggle"><input type="checkbox" id="force-kill"' + (state.modal.force ? ' checked' : '') + ' onchange="toggleForce()" /><label for="force-kill">Force kill (SIGKILL)</label></div>';
     html += '<div class="modal-actions"><button class="btn btn-surface" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doKill()">Kill</button></div>';
     html += '</div></div>';
@@ -680,23 +778,28 @@ function render() {
     html += '<div class="toast' + (state.toast.type === 'error' ? ' error' : '') + '"><span class="toast-icon">' + (state.toast.type === 'error' ? '&#10005;' : '&#10003;') + '</span>' + esc(state.toast.message) + '</div>';
   }
 
-  // Commit to DOM
+  // Commit to DOM — preserve focus and cursor position
   var searchEl = document.querySelector('.search-input');
   var freeEl = document.querySelector('.free-port-input');
+  var histEl = document.querySelector('.history-search');
   var hadSearchFocus = searchEl && document.activeElement === searchEl;
   var hadFreeFocus = freeEl && document.activeElement === freeEl;
+  var hadHistFocus = histEl && document.activeElement === histEl;
   var searchCursor = hadSearchFocus ? searchEl.selectionStart : null;
   var freeCursor = hadFreeFocus ? freeEl.selectionStart : null;
+  var histCursor = hadHistFocus ? histEl.selectionStart : null;
 
   document.getElementById('app').innerHTML = html;
 
   if (hadSearchFocus) { var ns = document.querySelector('.search-input'); if (ns) { ns.focus(); if (searchCursor !== null) ns.setSelectionRange(searchCursor, searchCursor); } }
   if (hadFreeFocus) { var nf = document.querySelector('.free-port-input'); if (nf) { nf.focus(); if (freeCursor !== null) nf.setSelectionRange(freeCursor, freeCursor); } }
+  if (hadHistFocus) { var nh = document.querySelector('.history-search'); if (nh) { nh.focus(); if (histCursor !== null) nh.setSelectionRange(histCursor, histCursor); } }
 }
 
 // ─── Event handlers ────────────────────────────────────────────────────────
 function onSearch(val) { state.search = val; render(); }
 function onFilter(cat) { state.filterCat = cat; render(); }
+function onHistorySearch(val) { state.historySearch = val; render(); }
 function toggleSelect(pid) { if (state.selected[pid]) delete state.selected[pid]; else state.selected[pid] = true; render(); }
 function toggleGroup(catName) {
   var items = state.ports.filter(function(p) { return p.category === catName; });

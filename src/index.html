@@ -741,9 +741,8 @@ function render() {
           html += '</div>';
           html += '<div class="proc-cmd">' + esc(p.docker_container ? p.exe_path + ' — ' + p.docker_container : p.exe_path) + '</div>';
           html += '</div>';
-          var cpuStr = p.cpu < 0 ? 'N/A' : p.cpu.toFixed(1) + '%';
           var memStr = p.memory_mb < 0 ? 'N/A' : (p.memory_mb < 1 ? '< 1M' : p.memory_mb.toFixed(0) + 'M');
-          html += '<span class="cpu-label">' + cpuStr + '</span>';
+          html += '<span class="cpu-label">-</span>';
           html += '<span class="mem-label">' + memStr + '</span>';
           html += '<span class="pid-label">' + p.pid + '</span>';
           html += '<span class="uptime-label">' + esc(p.uptime || 'N/A') + '</span>';

@@ -120,26 +120,39 @@
     }
     .free-port-btn:hover { background: #dc2626; }
 
-    /* View tabs (Ports / History) */
-    .view-tabs { padding: 12px 24px 0; display: flex; gap: 6px; }
-    .view-tab {
-      padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
-      background: var(--surface); color: var(--text-dim); border: 1px solid var(--border);
+    /* View toggle (Ports / History) — segmented control in header */
+    .view-toggle {
+      display: flex; border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--border); background: var(--bg); flex-shrink: 0;
     }
-    .view-tab:hover { background: var(--surface-hover); }
-    .view-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,0.1); }
+    .view-toggle-btn {
+      padding: 6px 16px; font-size: 12px; font-weight: 600; font-family: var(--sans);
+      color: var(--text-dim); background: transparent; border: none; cursor: pointer;
+      transition: all 0.15s; position: relative;
+    }
+    .view-toggle-btn:first-child { border-right: 1px solid var(--border); }
+    .view-toggle-btn:hover { color: var(--text); background: var(--surface); }
+    .view-toggle-btn.active { background: var(--accent); color: #fff; }
 
-    /* Category tabs */
-    .tabs { padding: 8px 24px 0; display: flex; gap: 6px; flex-wrap: wrap; }
-    .tab {
-      padding: 6px 13px; border-radius: 8px; font-size: 12px; font-weight: 600;
-      display: inline-flex; align-items: center; gap: 5px;
-      background: var(--surface); color: var(--text-dim); border: 1px solid var(--border);
+    /* Category filter bar — underline tabs */
+    .cat-bar {
+      display: flex; gap: 0; padding: 0 24px; margin-top: 4px;
+      border-bottom: 1px solid var(--border); overflow-x: auto;
     }
-    .tab:hover { background: var(--surface-hover); }
-    .tab.active { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,0.1); }
-    .tab-count { padding: 1px 6px; border-radius: 10px; font-size: 10.5px; background: var(--border); color: var(--text-dim); }
-    .tab.active .tab-count { background: rgba(99,102,241,0.2); color: var(--accent); }
+    .cat-tab {
+      padding: 10px 16px 8px; font-size: 12.5px; font-weight: 600; font-family: var(--sans);
+      color: var(--text-dim); border-bottom: 2px solid transparent;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 6px; background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .cat-tab:hover { color: var(--text); }
+    .cat-tab.active { border-bottom-color: var(--accent); color: var(--accent); }
+    .cat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .cat-count {
+      font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 8px;
+      background: var(--border); color: var(--text-dim); margin-left: 2px;
+    }
+    .cat-tab.active .cat-count { background: rgba(99,102,241,0.2); color: var(--accent); }
 
     /* Port list */
     .port-list { padding: 16px 24px 90px; }
@@ -627,6 +640,10 @@ function render() {
   html += '<div><h1>Port Manager</h1>';
   html += '<div class="subtitle">' + state.ports.length + ' open port' + (state.ports.length !== 1 ? 's' : '') + '</div></div></div>';
   html += '<div class="header-actions">';
+  html += '<div class="view-toggle">';
+  html += '<button class="view-toggle-btn' + (state.view === 'ports' ? ' active' : '') + '" onclick="switchView(\'ports\')">Ports</button>';
+  html += '<button class="view-toggle-btn' + (state.view === 'history' ? ' active' : '') + '" onclick="switchView(\'history\')">History</button>';
+  html += '</div>';
   if (selPorts.length > 0) html += '<button class="btn btn-danger" onclick="openModal(\'selected\')">Kill ' + selPorts.length + ' selected</button>';
   html += '<button class="btn btn-surface" onclick="doScan()"' + (state.scanning ? ' disabled' : '') + '>';
   html += state.scanning ? '<span style="animation:spin 1s linear infinite;display:inline-block">&#8635;</span> Scanning...' : '&#8635; Rescan';
@@ -643,11 +660,7 @@ function render() {
   html += '<button class="free-port-btn" onclick="doFreePort()">FREE</button>';
   html += '</div></div>';
 
-  // View tabs
-  html += '<div class="view-tabs">';
-  html += '<button class="view-tab' + (state.view === 'ports' ? ' active' : '') + '" onclick="switchView(\'ports\')">Ports</button>';
-  html += '<button class="view-tab' + (state.view === 'history' ? ' active' : '') + '" onclick="switchView(\'history\')">History</button>';
-  html += '</div>';
+  // (View toggle is now in the header)
 
   // Conflict banners
   if (state.conflicts.length > 0 && state.view === 'ports') {
@@ -662,18 +675,18 @@ function render() {
   }
 
   if (state.view === 'ports') {
-    // Category tabs
-    html += '<div class="tabs">';
-    html += '<button class="tab' + (state.filterCat === 'All' ? ' active' : '') + '" onclick="onFilter(\'All\')">All <span class="tab-count">' + state.ports.length + '</span></button>';
+    // Category filter bar
+    html += '<div class="cat-bar">';
+    html += '<button class="cat-tab' + (state.filterCat === 'All' ? ' active' : '') + '" onclick="onFilter(\'All\')">All <span class="cat-count">' + state.ports.length + '</span></button>';
     for (var ti = 0; ti < catKeys.length; ti++) {
       var cat = catKeys[ti], info = CATEGORIES[cat], count = catCounts[cat] || 0;
       if (count === 0) continue;
       var isA = state.filterCat === cat;
-      html += '<button class="tab' + (isA ? ' active' : '') + '"';
-      if (isA) html += ' style="border-color:' + info.color + ';color:' + info.color + ';background:' + rgbaFrom(info.color, 0.1) + '"';
+      html += '<button class="cat-tab' + (isA ? ' active' : '') + '"';
+      if (isA) html += ' style="border-bottom-color:' + info.color + ';color:' + info.color + '"';
       html += ' onclick="onFilter(\'' + esc(cat) + '\')">';
-      html += '<span style="font-weight:800;color:' + info.color + '">' + info.icon + '</span> ' + esc(cat);
-      html += ' <span class="tab-count"' + (isA ? ' style="background:' + rgbaFrom(info.color, 0.2) + ';color:' + info.color + '"' : '') + '>' + count + '</span></button>';
+      html += '<span class="cat-dot" style="background:' + info.color + '"></span>' + esc(cat);
+      html += '<span class="cat-count"' + (isA ? ' style="background:' + rgbaFrom(info.color, 0.15) + ';color:' + info.color + '"' : '') + '>' + count + '</span></button>';
     }
     html += '</div>';
 

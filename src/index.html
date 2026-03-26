@@ -265,6 +265,21 @@
       padding: 6px 14px; border-radius: 8px; font-family: var(--mono); pointer-events: auto;
     }
 
+    .conflict-banner {
+      margin: 10px 24px 0; padding: 10px 14px; border-radius: var(--radius);
+      background: rgba(245,158,66,0.1); border: 1px solid rgba(245,158,66,0.25);
+      display: flex; align-items: flex-start; gap: 10px; font-size: 12.5px;
+    }
+    .conflict-banner .cb-icon { font-size: 16px; flex-shrink: 0; line-height: 1; }
+    .conflict-banner .cb-text { color: var(--text); line-height: 1.5; }
+    .conflict-banner .cb-port { font-family: var(--mono); font-weight: 700; color: var(--orange); }
+    .conflict-banner .cb-action {
+      margin-left: auto; flex-shrink: 0; padding: 4px 10px; border-radius: 6px;
+      background: var(--orange); color: #fff; font-size: 11px; font-weight: 700;
+      font-family: var(--sans);
+    }
+    .conflict-banner .cb-action:hover { opacity: 0.85; }
+
     .error-box {
       margin: 20px; padding: 20px; border-radius: 10px;
       background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
@@ -345,6 +360,11 @@ function invokeCommand(cmd, args) {
   if (cmd === 'free_port') {
     return new Promise(function(resolve) { setTimeout(function() { resolve({ success: true, port: args.port, killed_pid: 1201, killed_process: "node", error: null }); }, 300); });
   }
+  if (cmd === 'get_conflicts') {
+    return new Promise(function(resolve) {
+      resolve([{ intended_port: 3000, actual_port: 3001, process: "node", pid: 1202, blocker_process: "node", blocker_pid: 1201 }]);
+    });
+  }
   if (cmd === 'get_history') {
     return new Promise(function(resolve) {
       var ts = Math.floor(Date.now() / 1000);
@@ -374,7 +394,7 @@ var CATEGORIES = {
 var state = {
   ports: [], selected: {}, search: '', filterCat: 'All',
   scanning: false, modal: null, toast: null, toastTimer: null,
-  freePortValue: '', view: 'ports', history: []
+  freePortValue: '', view: 'ports', history: [], conflicts: []
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -419,7 +439,9 @@ function doScan() {
     state.ports = (result && result.ports) || [];
     if (result && result.error) { showToast(result.error, 'error'); }
     else { showToast('Scan complete — ' + state.ports.length + ' port' + (state.ports.length !== 1 ? 's' : '')); }
-    state.scanning = false; render(); startAutoScan();
+    state.scanning = false;
+    invokeCommand('get_conflicts').then(function(c) { state.conflicts = c || []; render(); }).catch(function() { render(); });
+    startAutoScan();
   }).catch(function(e) { showToast('Scan failed: ' + e, 'error'); state.scanning = false; render(); startAutoScan(); });
 }
 
@@ -430,7 +452,10 @@ function doSilentScan() {
     var newPorts = result.ports || [];
     var oldKey = state.ports.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
     var newKey = newPorts.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
-    if (oldKey !== newKey) { state.ports = newPorts; render(); }
+    if (oldKey !== newKey) {
+      state.ports = newPorts;
+      invokeCommand('get_conflicts').then(function(c) { state.conflicts = c || []; render(); }).catch(function() { render(); });
+    }
   }).catch(function() {});
 }
 
@@ -525,6 +550,18 @@ function render() {
   html += '<button class="view-tab' + (state.view === 'ports' ? ' active' : '') + '" onclick="switchView(\'ports\')">Ports</button>';
   html += '<button class="view-tab' + (state.view === 'history' ? ' active' : '') + '" onclick="switchView(\'history\')">History</button>';
   html += '</div>';
+
+  // Conflict banners
+  if (state.conflicts.length > 0 && state.view === 'ports') {
+    for (var ci2 = 0; ci2 < state.conflicts.length; ci2++) {
+      var cf = state.conflicts[ci2];
+      html += '<div class="conflict-banner">';
+      html += '<span class="cb-icon">&#9888;</span>';
+      html += '<span class="cb-text"><span class="cb-port">:' + cf.actual_port + '</span> ' + esc(cf.process) + ' wanted <span class="cb-port">:' + cf.intended_port + '</span> but it\'s taken by ' + esc(cf.blocker_process) + ' (PID ' + cf.blocker_pid + ')</span>';
+      html += '<button class="cb-action" onclick="event.stopPropagation();freeConflict(' + cf.intended_port + ')">Free :' + cf.intended_port + '</button>';
+      html += '</div>';
+    }
+  }
 
   if (state.view === 'ports') {
     // Category tabs
@@ -678,6 +715,25 @@ function openModal(mode, catName, pid) {
 function closeModal() { state.modal = null; render(); }
 function toggleForce() { if (state.modal) state.modal.force = !state.modal.force; render(); }
 function switchView(v) { state.view = v; if (v === 'history') loadHistory(); render(); }
+function freeConflict(port) {
+  invokeCommand('free_port', { port: port, force: false }).then(function(r) {
+    if (r.success && r.killed_pid) {
+      showToast('Freed :' + port + ' (killed ' + r.killed_process + ')');
+      doSilentScan();
+    } else if (r.success) {
+      showToast('Port ' + port + ' is already free');
+    } else {
+      showToast('Failed: ' + (r.error || 'unknown'), 'error');
+    }
+  }).catch(function(e) { showToast('Free failed: ' + e, 'error'); });
+}
+
+// ─── Tray events ────────────────────────────────────────────────────────────
+try {
+  if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+    window.__TAURI__.event.listen('tray-rescan', function() { doSilentScan(); });
+  }
+} catch(e) {}
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 doScan();

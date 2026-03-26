@@ -12,7 +12,10 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::State;
+use tauri::{
+    AppHandle, CustomMenuItem, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
+    SystemTrayMenuItem, SystemTraySubmenu,
+};
 
 // ─── Data structures ────────────────────────────────────────────────────────
 
@@ -71,11 +74,68 @@ pub struct FreePortResult {
     pub error: Option<String>,
 }
 
+// ─── Port conflict detection ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortConflict {
+    pub intended_port: u16,
+    pub actual_port: u16,
+    pub process: String,
+    pub pid: u32,
+    pub blocker_process: String,
+    pub blocker_pid: u32,
+}
+
+// Common dev server ports that often fall back to port+1
+const CONFLICT_WATCH_PORTS: &[u16] = &[3000, 3001, 4200, 5000, 5173, 8000, 8080, 8888, 9000];
+
+fn detect_port_conflicts(ports: &[PortEntry]) -> Vec<PortConflict> {
+    let mut conflicts: Vec<PortConflict> = Vec::new();
+    let port_map: HashMap<u16, &PortEntry> = ports.iter().map(|p| (p.port, p)).collect();
+
+    for &watch_port in CONFLICT_WATCH_PORTS {
+        // If both port N and port N+1 are occupied by the same process name,
+        // the N+1 instance likely fell back because N was taken
+        let next_port = watch_port + 1;
+        if let (Some(blocker), Some(fallback)) = (port_map.get(&watch_port), port_map.get(&next_port)) {
+            // Same process type on adjacent ports = likely conflict
+            if blocker.process == fallback.process && blocker.pid != fallback.pid {
+                conflicts.push(PortConflict {
+                    intended_port: watch_port,
+                    actual_port: next_port,
+                    process: fallback.process.clone(),
+                    pid: fallback.pid,
+                    blocker_process: blocker.process.clone(),
+                    blocker_pid: blocker.pid,
+                });
+            }
+        }
+    }
+    conflicts
+}
+
+fn send_conflict_notification(app: &AppHandle, conflict: &PortConflict) {
+    let _ = tauri::api::notification::Notification::new(&app.config().tauri.bundle.identifier)
+        .title("Port Conflict Detected")
+        .body(format!(
+            "{} (PID {}) wanted :{} but fell back to :{} — port :{} is held by {} (PID {})",
+            conflict.process,
+            conflict.pid,
+            conflict.intended_port,
+            conflict.actual_port,
+            conflict.intended_port,
+            conflict.blocker_process,
+            conflict.blocker_pid
+        ))
+        .show();
+}
+
 // ─── History state ──────────────────────────────────────────────────────────
 
 pub struct AppState {
     history: Mutex<Vec<HistoryEvent>>,
     last_ports: Mutex<HashMap<(u32, u16), String>>, // (pid, port) -> process name
+    last_conflicts: Mutex<Vec<(u16, u16)>>,         // previously notified (intended, actual) pairs
 }
 
 fn now_unix() -> u64 {
@@ -487,7 +547,7 @@ fn update_history(
 // ─── Tauri commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
-fn scan_ports(state: State<AppState>) -> ScanResult {
+fn scan_ports(app: AppHandle, state: State<AppState>) -> ScanResult {
     let ports = do_scan_ports();
 
     // Update history
@@ -495,10 +555,38 @@ fn scan_ports(state: State<AppState>) -> ScanResult {
         update_history(&ports, &mut last, &mut hist);
     }
 
+    // Detect port conflicts and notify for new ones
+    let conflicts = detect_port_conflicts(&ports);
+    if let Ok(mut last_conflicts) = state.last_conflicts.lock() {
+        for conflict in &conflicts {
+            let key = (conflict.intended_port, conflict.actual_port);
+            if !last_conflicts.contains(&key) {
+                send_conflict_notification(&app, conflict);
+                last_conflicts.push(key);
+            }
+        }
+        // Remove stale conflict entries
+        let current_keys: Vec<(u16, u16)> = conflicts
+            .iter()
+            .map(|c| (c.intended_port, c.actual_port))
+            .collect();
+        last_conflicts.retain(|k| current_keys.contains(k));
+    }
+
+    // Update tray menu with current port count
+    update_tray_menu(&app, &ports);
+
     ScanResult {
         ports,
         error: None,
     }
+}
+
+#[tauri::command]
+fn get_conflicts(_state: State<AppState>) -> Vec<PortConflict> {
+    // Re-scan to get current conflicts
+    let ports = do_scan_ports();
+    detect_port_conflicts(&ports)
 }
 
 #[tauri::command]
@@ -619,17 +707,170 @@ fn get_history(state: State<AppState>) -> Vec<HistoryEvent> {
     state.history.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
+// ─── System Tray ────────────────────────────────────────────────────────────
+
+fn build_tray_menu(ports: &[PortEntry]) -> SystemTrayMenu {
+    let mut menu = SystemTrayMenu::new();
+
+    // Header
+    let header = CustomMenuItem::new("header", format!("Port Manager — {} ports", ports.len()))
+        .disabled();
+    menu = menu.add_item(header);
+    menu = menu.add_native_item(SystemTrayMenuItem::Separator);
+
+    // Show top ports (up to 8) grouped by category
+    if !ports.is_empty() {
+        let mut by_cat: HashMap<String, Vec<&PortEntry>> = HashMap::new();
+        for p in ports {
+            by_cat.entry(p.category.clone()).or_default().push(p);
+        }
+
+        let cat_order = [
+            "Dev Servers",
+            "Databases",
+            "Web / Proxy",
+            "Containers",
+            "Apps",
+            "System",
+            "Other",
+        ];
+        let mut shown = 0;
+        for cat_name in &cat_order {
+            if shown >= 8 {
+                break;
+            }
+            if let Some(items) = by_cat.get(*cat_name) {
+                let sub_items: Vec<CustomMenuItem> = items
+                    .iter()
+                    .take(5)
+                    .map(|p| {
+                        CustomMenuItem::new(
+                            format!("free_{}", p.port),
+                            format!(":{} — {} (PID {})", p.port, p.process, p.pid),
+                        )
+                    })
+                    .collect();
+
+                let mut sub_menu = SystemTrayMenu::new();
+                for item in sub_items {
+                    sub_menu = sub_menu.add_item(item);
+                    shown += 1;
+                }
+                menu = menu.add_submenu(SystemTraySubmenu::new(
+                    format!("{} ({})", cat_name, items.len()),
+                    sub_menu,
+                ));
+            }
+        }
+
+        menu = menu.add_native_item(SystemTrayMenuItem::Separator);
+    }
+
+    // Quick actions
+    let show = CustomMenuItem::new("show", "Show Window");
+    let rescan = CustomMenuItem::new("rescan", "Rescan Ports");
+    let quit = CustomMenuItem::new("quit", "Quit Port Manager");
+
+    menu = menu.add_item(show);
+    menu = menu.add_item(rescan);
+    menu = menu.add_native_item(SystemTrayMenuItem::Separator);
+    menu = menu.add_item(quit);
+
+    menu
+}
+
+fn update_tray_menu(app: &AppHandle, ports: &[PortEntry]) {
+    if let Some(tray) = app.tray_handle_by_id("main") {
+        let _ = tray.set_menu(build_tray_menu(ports));
+    }
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 fn main() {
+    let tray_menu = build_tray_menu(&[]);
+    let system_tray = SystemTray::new()
+        .with_id("main")
+        .with_menu(tray_menu);
+
     tauri::Builder::default()
+        .system_tray(system_tray)
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::LeftClick { .. } => {
+                // Show and focus the window on tray left click
+                if let Some(window) = app.get_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                "quit" => {
+                    std::process::exit(0);
+                }
+                "show" => {
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.unminimize();
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+                "rescan" => {
+                    // Emit a rescan event to the frontend
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.emit("tray-rescan", ());
+                    }
+                }
+                other => {
+                    // Handle "free_PORT" clicks
+                    if let Some(port_str) = other.strip_prefix("free_") {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            let result = free_port(port, false);
+                            if result.success {
+                                let msg = if let Some(proc_name) = &result.killed_process {
+                                    format!("Freed :{} (killed {})", port, proc_name)
+                                } else {
+                                    format!("Port {} is already free", port)
+                                };
+                                let _ = tauri::api::notification::Notification::new(
+                                    &app.config().tauri.bundle.identifier,
+                                )
+                                .title("Port Freed")
+                                .body(msg)
+                                .show();
+                            }
+                            // Trigger a rescan in the frontend
+                            if let Some(window) = app.get_window("main") {
+                                let _ = window.emit("tray-rescan", ());
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {}
+        })
+        .on_window_event(|event| {
+            // Minimize to dock instead of quitting when red X is clicked
+            // This keeps the tray alive and the dock icon clickable
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
+                let _ = event.window().minimize();
+                api.prevent_close();
+            }
+        })
         .manage(AppState {
             history: Mutex::new(Vec::new()),
             last_ports: Mutex::new(HashMap::new()),
+            last_conflicts: Mutex::new(Vec::new()),
         })
         .invoke_handler(tauri::generate_handler![
-            scan_ports, kill_ports, free_port, get_history
+            scan_ports, kill_ports, free_port, get_history, get_conflicts
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Port Manager");
+        .build(tauri::generate_context!())
+        .expect("error while building Port Manager")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                // Prevent the app from exiting when all windows are minimized
+                api.prevent_exit();
+            }
+        });
 }

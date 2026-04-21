@@ -1,3 +1,7 @@
+# Empty [workspace] detaches this crate from the parent workspace that lives in
+# the main worktree (which is mid-refactor). Keeps the worktree self-contained.
+[workspace]
+
 [package]
 name = "port-manager"
 version = "1.0.0"

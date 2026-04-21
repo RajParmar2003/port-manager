@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -37,6 +37,7 @@ pub struct PortEntry {
     pub is_orphan: bool,
     pub docker_container: Option<String>, // "container_name (image) — status"
     pub launch_agent: Option<String>,     // launchctl label (e.g. "homebrew.mxcl.postgresql@14")
+    pub project: Option<String>,          // git project root absolute path, or None if not in a git repo
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -574,6 +575,78 @@ fn build_docker_port_map() -> HashMap<u16, String> {
     map
 }
 
+// ─── Project detection (git repo root from process CWD) ────────────────────
+// For each PID we ask lsof for its current working directory, then walk upward
+// until we find a `.git` entry (directory or file — worktrees use a file).
+// The canonicalized project root path is returned. Capped at 20 parent levels
+// to avoid pathological loops.
+//
+// Known limitations:
+// - lsof often cannot read CWD for processes owned by other users (returns
+//   empty output). Those ports will have `project = None`.
+// - Processes that chdir() after launch report the new CWD, not the launch
+//   directory — acceptable for this feature's goal (grouping live work).
+// - Nested git repos resolve to the innermost `.git` they encounter walking
+//   up; this matches developer intuition.
+//
+// Callers must pass a scan-scoped cache so multi-port PIDs don't pay the lookup
+// cost more than once per scan cycle. The cache key is PID; value is the
+// resolved `Option<String>` so even negative results are cached.
+
+fn get_cwd_for_pid(pid: u32) -> Option<PathBuf> {
+    // `lsof -a -p PID -d cwd -Fn` restricts to the cwd fd and emits field-style
+    // output. The 'n' field carries the path.
+    let output = Command::new("lsof")
+        .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if let Some(rest) = line.strip_prefix('n') {
+            let trimmed = rest.trim();
+            if !trimmed.is_empty() {
+                return Some(PathBuf::from(trimmed));
+            }
+        }
+    }
+    None
+}
+
+fn find_git_root(start: &Path) -> Option<PathBuf> {
+    // Resolve symlinks so Docker bind mounts and similar surprises don't skew
+    // the result. If canonicalize fails (permission, missing), fall back to the
+    // raw path so we still attempt the walk.
+    let mut current: PathBuf = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
+
+    for _ in 0..20 {
+        // `.git` can be either a directory (normal repo) or a regular file
+        // (git worktree, submodule pointer). `exists()` covers both.
+        if current.join(".git").exists() {
+            return Some(current);
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent.to_path_buf(),
+            _ => break, // reached filesystem root or can't go higher
+        }
+    }
+    None
+}
+
+fn get_project_for_pid(pid: u32, cache: &mut HashMap<u32, Option<String>>) -> Option<String> {
+    if let Some(cached) = cache.get(&pid) {
+        return cached.clone();
+    }
+    let resolved = get_cwd_for_pid(pid)
+        .and_then(|cwd| find_git_root(&cwd))
+        .map(|p| p.to_string_lossy().trim_end_matches('/').to_string());
+    cache.insert(pid, resolved.clone());
+    resolved
+}
+
 // ─── Core scan logic ────────────────────────────────────────────────────────
 
 fn do_scan_ports() -> Vec<PortEntry> {
@@ -595,6 +668,8 @@ fn do_scan_ports() -> Vec<PortEntry> {
 
     let mut entries: Vec<PortEntry> = Vec::new();
     let mut seen: HashMap<(u32, u16), bool> = HashMap::new();
+    // Scan-scoped cache so multi-port PIDs only pay the CWD+walk cost once.
+    let mut project_cache: HashMap<u32, Option<String>> = HashMap::new();
 
     for r in records {
         if r.port == 0 || seen.contains_key(&(r.pid, r.port)) {
@@ -607,6 +682,7 @@ fn do_scan_ports() -> Vec<PortEntry> {
         let docker_container = docker_map.get(&r.port).cloned();
         let launch_agent = launchctl_map.get(&r.pid).cloned();
         let is_orphan = is_truly_orphan(info.ppid, launch_agent.is_some(), &info.tty);
+        let project = get_project_for_pid(r.pid, &mut project_cache);
 
         let exe_path = extract_exe_path(&info.command);
         entries.push(PortEntry {
@@ -625,6 +701,7 @@ fn do_scan_ports() -> Vec<PortEntry> {
             is_orphan,
             docker_container,
             launch_agent,
+            project,
         });
     }
 

@@ -403,8 +403,18 @@
       letter-spacing: -0.1px;
     }
     .proj-basename:hover { opacity: 0.7; }
-    .proj-basename.unassigned { color: var(--text-dim); cursor: default; }
+    .proj-basename.unassigned {
+      color: var(--text-dim); cursor: default;
+      font-style: italic; font-weight: 600; letter-spacing: 0.2px;
+    }
     .proj-basename.unassigned:hover { opacity: 1; }
+    /* Unassigned bucket keeps the same surface as other groups so visual
+       consistency holds — a subtle warning-tinted border is the only cue,
+       enough to draw the eye without screaming. Works in both themes. */
+    .group.unassigned-group .group-table {
+      border-color: rgba(239, 68, 68, 0.45);
+      box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.12);
+    }
     .proj-path-hint {
       font-size: 10.5px; color: var(--text-dim); font-family: var(--mono);
       margin-left: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -922,7 +932,7 @@ function render() {
         // All project groups share the accent color (except Unassigned → dim)
         var pColor = grp.isUnassigned ? '#8b8b9e' : '#6366f1';
 
-        html += '<div class="group"><div class="group-header project-header"><div class="group-header-left">';
+        html += '<div class="group' + (grp.isUnassigned ? ' unassigned-group' : '') + '"><div class="group-header project-header"><div class="group-header-left">';
         html += '<div class="checkbox' + (pAllSel ? ' checked' : '') + '" onclick="toggleProjectGroup(\'' + esc(grp.key) + '\')">' + (pAllSel ? '&#10003;' : '') + '</div>';
         // Folder icon (closed folder outline)
         html += '<svg class="proj-folder' + (grp.isUnassigned ? ' unassigned' : '') + '" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';

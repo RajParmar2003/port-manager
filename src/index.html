@@ -337,6 +337,37 @@
       color: var(--red); font-family: var(--mono); font-size: 13px;
       white-space: pre-wrap; word-break: break-all;
     }
+
+    /* User attribution on rows */
+    .proc-user { font-size: 10.5px; color: var(--text-dim); font-weight: 400; margin-left: 4px; }
+    .proc-user.sys { color: var(--orange); }
+
+    /* Search clear ✕ */
+    .search-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--border); color: var(--text-dim); border: none;
+      font-size: 10px; cursor: pointer; line-height: 1;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .search-clear:hover { background: var(--text-dim); color: var(--bg); }
+
+    /* Copyable port / PID cells */
+    .port-num-btn {
+      font-family: var(--mono); font-size: 13px; font-weight: 600;
+      background: none; border: none; padding: 0; cursor: pointer;
+      border-radius: 4px; transition: opacity 0.12s;
+    }
+    .port-num-btn:hover { opacity: 0.75; }
+    .pid-btn {
+      font-size: 11px; color: var(--text-dim); font-family: var(--mono);
+      text-align: right; background: none; border: none; padding: 0;
+      cursor: pointer; border-radius: 4px; transition: opacity 0.12s; width: 100%;
+    }
+    .pid-btn:hover { opacity: 0.75; }
+
+    /* Theme icon */
+    .theme-icon { width: 16px; height: 16px; display: block; }
   </style>
 </head>
 <body>
@@ -449,6 +480,25 @@ var CATEGORIES = {
   "System":         { color: "#94a3b8" },
   "Other":          { color: "#64748b" }
 };
+
+var CATEGORY_ICONS = {
+  "Dev Servers":    '<path d="M7 8l-4 4 4 4M17 8l4 4-4 4M14 4l-4 16"/>',
+  "Databases":      '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>',
+  "AI / ML":        '<path d="M12 2a2 2 0 012 2v1a5 5 0 010 10v1a2 2 0 01-4 0v-1a5 5 0 010-10V4a2 2 0 012-2z"/><circle cx="12" cy="12" r="2"/>',
+  "Message Queues": '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 10h8M8 14h5"/>',
+  "Web / Proxy":    '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>',
+  "Containers":     '<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>',
+  "Apps":           '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  "System":         '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  "Other":          '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>'
+};
+
+function catIconSvg(catName, size) {
+  var paths = CATEGORY_ICONS[catName];
+  if (!paths) return '';
+  var col = (CATEGORIES[catName] || CATEGORIES["Other"]).color;
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="' + col + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0">' + paths + '</svg>';
+}
 
 // ─── State ─────────────────────────────────────────────────────────────────
 var state = {
@@ -651,13 +701,23 @@ function render() {
   html += '<button class="btn btn-surface" onclick="doScan()"' + (state.scanning ? ' disabled' : '') + '>';
   html += state.scanning ? '<span style="animation:spin 1s linear infinite;display:inline-block">&#8635;</span> Scanning...' : '&#8635; Rescan';
   html += '</button>';
-  html += '<button class="btn-icon" onclick="toggleTheme()" title="Toggle theme">' + (currentTheme === 'dark' ? '&#9788;' : '&#9790;') + '</button>';
+  html += '<button class="btn-icon" onclick="toggleTheme()" title="' + (currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') + '">';
+  if (currentTheme === 'dark') {
+    // Sun: filled disc + dashed corona — reads clearly at 16px
+    html += '<svg class="theme-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="currentColor"/><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5" stroke-linecap="round"/></svg>';
+  } else {
+    // Moon: simple crescent
+    html += '<svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  }
+  html += '</button>';
   html += '</div></div>';
 
   // Toolbar: search + free port
   html += '<div class="toolbar">';
   html += '<div class="search-wrap"><span class="search-icon">&#x2315;</span>';
-  html += '<input class="search-input" type="text" placeholder="Search by process, port, or command..." value="' + esc(state.search) + '" oninput="onSearch(this.value)" /></div>';
+  html += '<input class="search-input" type="text" placeholder="Search by process, port, or command..." value="' + esc(state.search) + '" oninput="onSearch(this.value)"' + (state.search ? ' style="padding-right:36px"' : '') + ' />';
+  if (state.search) html += '<button class="search-clear" onclick="onSearch(\'\')" title="Clear search (Esc)">&#10005;</button>';
+  html += '</div>';
   html += '<div class="free-port-wrap">';
   html += '<input class="free-port-input" type="text" placeholder="Port #" value="' + esc(state.freePortValue) + '" oninput="state.freePortValue=this.value" onkeydown="if(event.key===\'Enter\')doFreePort()" />';
   html += '<button class="free-port-btn" onclick="doFreePort()">FREE</button>';
@@ -688,7 +748,7 @@ function render() {
       html += '<button class="cat-tab' + (isA ? ' active' : '') + '"';
       if (isA) html += ' style="border-bottom-color:' + info.color + ';color:' + info.color + '"';
       html += ' onclick="onFilter(\'' + esc(cat) + '\')">';
-      html += '<span class="cat-dot" style="background:' + info.color + '"></span>' + esc(cat);
+      html += catIconSvg(cat, 12) + ' ' + esc(cat);
       html += '<span class="cat-count"' + (isA ? ' style="background:' + rgbaFrom(info.color, 0.15) + ';color:' + info.color + '"' : '') + '>' + count + '</span></button>';
     }
     html += '</div>';
@@ -712,6 +772,7 @@ function render() {
 
         html += '<div class="group"><div class="group-header"><div class="group-header-left">';
         html += '<div class="checkbox' + (allSel ? ' checked' : '') + '" onclick="toggleGroup(\'' + esc(catName) + '\')">' + (allSel ? '&#10003;' : '') + '</div>';
+        html += catIconSvg(catName, 13);
         html += '<span class="group-label" style="color:' + catInfo.color + '">' + esc(catName) + '</span>';
         html += '<span class="group-count">' + items.length + '</span></div>';
         html += '<button class="btn btn-sm" style="background:' + rgbaFrom(catInfo.color, 0.08) + ';color:' + catInfo.color + ';border:1px solid ' + rgbaFrom(catInfo.color, 0.2) + '"';
@@ -723,8 +784,11 @@ function render() {
           var p = items[pi], sel = state.selected[p.pid];
           html += '<div class="port-row" onclick="toggleSelect(' + p.pid + ')">';
           html += '<div class="checkbox' + (sel ? ' checked' : '') + '" onclick="event.stopPropagation();toggleSelect(' + p.pid + ')">' + (sel ? '&#10003;' : '') + '</div>';
-          html += '<span class="port-num" style="color:' + catInfo.color + '">:' + p.port + '</span>';
+          html += '<button class="port-num-btn" style="color:' + catInfo.color + '" onclick="event.stopPropagation();copyToClipboard(\':' + p.port + '\')" title="Copy :' + p.port + '">:' + p.port + '</button>';
           html += '<div style="min-width:0"><div class="proc-name">' + esc(p.process);
+          var isSys = p.user === 'root' || (p.user && p.user.charAt(0) === '_');
+          if (p.user) html += '<span class="proc-user' + (isSys ? ' sys' : '') + '">· ' + esc(p.user) + '</span>';
+          if (isSys) html += ' <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" title="System user — kill with caution" style="display:inline-block;vertical-align:middle;margin-left:2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
 
           // Tags — only shown when provably accurate
           if (p.is_orphan) {
@@ -744,7 +808,7 @@ function render() {
           var memStr = p.memory_mb < 0 ? 'N/A' : (p.memory_mb < 1 ? '< 1M' : p.memory_mb.toFixed(0) + 'M');
           html += '<span class="cpu-label">-</span>';
           html += '<span class="mem-label">' + memStr + '</span>';
-          html += '<span class="pid-label">' + p.pid + '</span>';
+          html += '<button class="pid-btn" onclick="event.stopPropagation();copyToClipboard(\'' + p.pid + '\')" title="Copy PID ' + p.pid + '">' + p.pid + '</button>';
           html += '<span class="uptime-label">' + esc(p.uptime || 'N/A') + '</span>';
           html += '<button class="copy-url-btn" onclick="event.stopPropagation();copyToClipboard(\'http://localhost:' + p.port + '\')" title="Copy URL (localhost:' + p.port + ')">';
           html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/></svg>';

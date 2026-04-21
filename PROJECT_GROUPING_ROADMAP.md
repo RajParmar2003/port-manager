@@ -58,12 +58,13 @@ Add project resolution to the scan pipeline.
 
 Add the toggle. Wire project mode through `render()`.
 
-- [ ] New state: `state.groupBy` (`'category'` | `'project'`), loaded from `localStorage['pm-grouping']`, default `'category'`
-- [ ] New segmented toggle in the category tab bar area: **Group: [Category | Project]**
-- [ ] `onGroupBy(mode)` handler updates state and persists
-- [ ] New helper `getGroupedByProject(filtered)` returns `{ projectPath: [port, ...] }` with "Unassigned" bucket for `project === null`
-- [ ] `render()` branches on `state.groupBy` to call either `getGrouped` (category) or `getGroupedByProject` (project)
-- [ ] Project mode hides the category filter tabs (they still exist for category mode)
+- [x] New state: `state.groupBy` (`'category'` | `'project'`), loaded from `localStorage['pm-grouping']`, default `'category'`
+- [x] New segmented toggle in the category tab bar area: **Group: [Category | Project]**
+- [x] `setGroupBy(mode)` handler updates state and persists
+- [x] New helper `getGroupedByProject(filtered)` returns sorted `[{key, label, path, items, isUnassigned}]` with Unassigned last
+- [x] `render()` branches on `state.groupBy` to call either `getGrouped` (category) or `getGroupedByProject` (project)
+- [x] Project mode hides the category filter tabs (they still exist for category mode)
+- [x] `getFiltered` ignores `state.filterCat` in project mode so filter doesn't silently leak across modes
 
 **Acceptance test:** Toggle switches between modes. Refresh page — preference persists. In project mode, ports group by detected project path; orphans fall under "Unassigned."
 
@@ -71,12 +72,12 @@ Add the toggle. Wire project mode through `render()`.
 
 Give project groups the same quality of affordances as category groups.
 
-- [ ] Project group header shows: folder-icon SVG, basename, port count, full path as `title` tooltip
-- [ ] Project group header has a "Kill project" button (red, same style as "Kill group")
-- [ ] Kill-project flows through the existing confirmation modal with the modal title showing the project basename
-- [ ] Group-select checkbox in the header toggles selection of all ports in the project
-- [ ] Clicking the header basename copies the full path to clipboard (bonus affordance)
-- [ ] Mock data includes a `project` field so browser preview works
+- [x] Project group header shows: folder-icon SVG, basename, port count, full path as `title` tooltip (plus an inline truncated path hint)
+- [x] Project group header has a "Kill project" button (accent-tinted, same sizing as "Kill group"). Hidden on Unassigned bucket (killing "not in a repo" doesn't parse semantically)
+- [x] Kill-project flows through the existing confirmation modal via `openModal('project', projectKey)`
+- [x] Group-select checkbox in the header toggles selection of all ports in the project via `toggleProjectGroup(projectKey)`
+- [x] Clicking the header basename copies the full path to clipboard (disabled for Unassigned)
+- [x] Mock data seeded with three projects' worth of variety: client-dashboard (2 ports), api-server (1 port), 4 ports with `project: null` for Unassigned bucket
 
 **Acceptance test:** Each project group has a folder icon + basename + count + "Kill project" button. Hovering the basename shows the full path. Clicking "Kill project" opens the confirmation modal naming the project.
 
@@ -133,8 +134,8 @@ Update here as phases close. Also mirror to the checkboxes in each phase above.
 | Phase | Status | Opened | Closed | Notes |
 |---|---|---|---|---|
 | 1 — Backend detection | 🟡 Committed, unverified | 2026-04-20 | — | Field, function, cache, scan wiring in. `cargo check` clean. Live-app verification deferred to B4 (Phase 5 integration pass). |
-| 2 — Mode toggle + render | ⚪ Not started | — | — | Part of batch B2 |
-| 3 — Project headers | ⚪ Not started | — | — | Part of batch B2 (bundled with Phase 2 — frontend ships together) |
+| 2 — Mode toggle + render | 🟡 Committed, unverified | 2026-04-21 | 2026-04-21 | B2 landed: state + toggle + getGroupedByProject + render branching + getFiltered mode-aware. JS parses. Live visual deferred to B4. |
+| 3 — Project headers | 🟡 Committed, unverified | 2026-04-21 | 2026-04-21 | B2 landed: folder icon, basename-as-copy-button, path hint + tooltip, Kill-project button, group-select checkbox, Unassigned bucket, 3-project mock data. |
 | 4 — Integration/persistence | ⚪ Not started | — | — | Batch B3, requires B2 |
 | 5 — Verification | ⚪ Not started | — | — | Batch B4, requires B3 |
 | 3 — Project headers | ⚪ Not started | — | — | Blocked on Phase 2 |
@@ -232,6 +233,8 @@ Every material decision or scope change gets a line. Append-only.
 - **2026-04-20** — Batching plan locked: B1 commits Phase 1, B2 lands Phases 2+3 together (frontend ships atomically), B3 is Phase 4 polish, B4 is Phase 5 verification + PR.
 - **2026-04-20** — Status legend revised to 3 gates (Written / Committed / Verified) after noticing that "code complete" was being conflated with "on the branch."
 - **2026-04-20** — B1 committed: Phase 1 Rust + roadmap on `project-grouping`. Phase 1 moves 🟠 → 🟡.
+- **2026-04-21** — B1 pushed to `origin/project-grouping`.
+- **2026-04-21** — B2 shipped: `state.groupBy` + localStorage init, `setGroupBy` handler, `getGroupedByProject` helper, `basename` helper, `toggleProjectGroup` handler, `openModal` extended to handle `'project'` scope, `getFiltered` made mode-aware so category filter doesn't silently leak into project mode. Extracted `renderPortRow` to share row markup between both grouping branches. Frontend gets a "Group by [Category | Project]" segmented control; project mode hides category tabs; project headers get folder icon + basename (click-to-copy path) + truncated path hint + Kill-project button + group-select checkbox. Mock data seeded with 3 projects' worth of spread. JS parses clean. Live visual verification deferred to B4 — the preview tool is locked to a different port/source and can't navigate to the worktree's preview server (known tooling limitation, not a code issue).
 
 ---
 

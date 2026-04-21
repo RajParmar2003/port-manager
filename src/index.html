@@ -368,6 +368,48 @@
 
     /* Theme icon */
     .theme-icon { width: 16px; height: 16px; display: block; }
+
+    /* Group-by segmented control */
+    .group-toggle {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 24px 0;
+    }
+    .group-toggle-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--text-dim);
+    }
+    .group-seg {
+      display: inline-flex; border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--border); background: var(--surface);
+    }
+    .group-seg-btn {
+      padding: 5px 14px; font-size: 11.5px; font-weight: 600;
+      color: var(--text-dim); background: transparent; border: none; cursor: pointer;
+      font-family: var(--sans); transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .group-seg-btn:first-child { border-right: 1px solid var(--border); }
+    .group-seg-btn.active { background: var(--accent); color: #fff; }
+    .group-seg-btn:hover:not(.active) { color: var(--text); background: var(--surface-hover); }
+
+    /* Project group header */
+    .group-header.project-header .group-header-left { gap: 8px; }
+    .proj-folder { color: var(--accent); flex-shrink: 0; }
+    .proj-folder.unassigned { color: var(--text-dim); }
+    .proj-basename {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      background: none; border: none; padding: 0; cursor: pointer;
+      font-family: var(--sans); border-radius: 4px; transition: opacity 0.12s;
+      letter-spacing: -0.1px;
+    }
+    .proj-basename:hover { opacity: 0.7; }
+    .proj-basename.unassigned { color: var(--text-dim); cursor: default; }
+    .proj-basename.unassigned:hover { opacity: 1; }
+    .proj-path-hint {
+      font-size: 10.5px; color: var(--text-dim); font-family: var(--mono);
+      margin-left: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 320px; display: inline-block; vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -426,12 +468,13 @@ function invokeCommand(cmd, args) {
     return new Promise(function(resolve) {
       setTimeout(function() {
         resolve({ ports: [
-          { pid: 1201, process: "node", port: 3000, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/node /app/next dev", exe_path: "/usr/local/bin/node", category: "Dev Servers", cpu: 2.3, memory_mb: 145.2, uptime: "1h 23m", is_orphan: false, docker_container: null, launch_agent: null },
-          { pid: 1202, process: "node", port: 3001, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/node /app/next dev", exe_path: "/usr/local/bin/node", category: "Dev Servers", cpu: 0.1, memory_mb: 98.0, uptime: "45m 12s", is_orphan: true, docker_container: null, launch_agent: null },
-          { pid: 502, process: "postgres", port: 5432, protocol: "TCP", state: "LISTEN", user: "_postgres", command: "/usr/local/opt/postgresql/bin/postgres -D /usr/local/var/postgres", exe_path: "/usr/local/opt/postgresql/bin/postgres", category: "Databases", cpu: 0.0, memory_mb: 22.4, uptime: "3d 2h", is_orphan: false, docker_container: null, launch_agent: "homebrew.mxcl.postgresql@14" },
-          { pid: 503, process: "redis-server", port: 6379, protocol: "TCP", state: "LISTEN", user: "you", command: "redis-server *:6379", exe_path: "redis-server", category: "Databases", cpu: 0.1, memory_mb: 3.2, uptime: "2d 0h", is_orphan: false, docker_container: "my-redis (redis:7) — Up 2 hours", launch_agent: null },
-          { pid: 700, process: "nginx", port: 80, protocol: "TCP", state: "LISTEN", user: "root", command: "/usr/local/bin/nginx -g daemon off;", exe_path: "/usr/local/bin/nginx", category: "Web / Proxy", cpu: 0.0, memory_mb: 5.1, uptime: "5d 12h", is_orphan: false, docker_container: null, launch_agent: null },
-          { pid: 1500, process: "sshd", port: 22, protocol: "TCP", state: "LISTEN", user: "root", command: "/usr/sbin/sshd -i", exe_path: "/usr/sbin/sshd", category: "System", cpu: 0.0, memory_mb: 1.8, uptime: "5d 12h", is_orphan: false, docker_container: null, launch_agent: null }
+          { pid: 1201, process: "node", port: 3000, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/node /app/next dev", exe_path: "/usr/local/bin/node", category: "Dev Servers", cpu: 2.3, memory_mb: 145.2, uptime: "1h 23m", is_orphan: false, docker_container: null, launch_agent: null, project: "/Users/raj/dev/client-dashboard" },
+          { pid: 1202, process: "node", port: 3001, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/node /app/next dev", exe_path: "/usr/local/bin/node", category: "Dev Servers", cpu: 0.1, memory_mb: 98.0, uptime: "45m 12s", is_orphan: true, docker_container: null, launch_agent: null, project: "/Users/raj/dev/client-dashboard" },
+          { pid: 1305, process: "python3", port: 4000, protocol: "TCP", state: "LISTEN", user: "you", command: "/usr/local/bin/python3 -m uvicorn app:main --reload", exe_path: "/usr/local/bin/python3", category: "Dev Servers", cpu: 0.5, memory_mb: 62.0, uptime: "22m 4s", is_orphan: false, docker_container: null, launch_agent: null, project: "/Users/raj/dev/api-server" },
+          { pid: 502, process: "postgres", port: 5432, protocol: "TCP", state: "LISTEN", user: "_postgres", command: "/usr/local/opt/postgresql/bin/postgres -D /usr/local/var/postgres", exe_path: "/usr/local/opt/postgresql/bin/postgres", category: "Databases", cpu: 0.0, memory_mb: 22.4, uptime: "3d 2h", is_orphan: false, docker_container: null, launch_agent: "homebrew.mxcl.postgresql@14", project: null },
+          { pid: 503, process: "redis-server", port: 6379, protocol: "TCP", state: "LISTEN", user: "you", command: "redis-server *:6379", exe_path: "redis-server", category: "Databases", cpu: 0.1, memory_mb: 3.2, uptime: "2d 0h", is_orphan: false, docker_container: "my-redis (redis:7) — Up 2 hours", launch_agent: null, project: null },
+          { pid: 700, process: "nginx", port: 80, protocol: "TCP", state: "LISTEN", user: "root", command: "/usr/local/bin/nginx -g daemon off;", exe_path: "/usr/local/bin/nginx", category: "Web / Proxy", cpu: 0.0, memory_mb: 5.1, uptime: "5d 12h", is_orphan: false, docker_container: null, launch_agent: null, project: null },
+          { pid: 1500, process: "sshd", port: 22, protocol: "TCP", state: "LISTEN", user: "root", command: "/usr/sbin/sshd -i", exe_path: "/usr/sbin/sshd", category: "System", cpu: 0.0, memory_mb: 1.8, uptime: "5d 12h", is_orphan: false, docker_container: null, launch_agent: null, project: null }
         ], error: null });
       }, 500);
     });
@@ -501,11 +544,19 @@ function catIconSvg(catName, size) {
 }
 
 // ─── State ─────────────────────────────────────────────────────────────────
+var savedGroupBy = 'category';
+try {
+  var raw = localStorage.getItem('pm-grouping');
+  if (raw === 'project' || raw === 'category') savedGroupBy = raw;
+} catch(e) {}
+
 var state = {
   ports: [], selected: {}, search: '', filterCat: 'All',
   scanning: false, modal: null, toast: null, toastTimer: null,
   freePortValue: '', view: 'ports', history: [], conflicts: [],
-  historySearch: ''
+  historySearch: '',
+  // groupBy: 'category' | 'project' — persisted to localStorage['pm-grouping']
+  groupBy: savedGroupBy
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -544,8 +595,14 @@ function extractContainerName(dockerStr) {
   return dockerStr;
 }
 function getFiltered() {
+  // Category filter only applies in category grouping mode. In project mode
+  // the category tabs are hidden, so we must not silently apply a stale
+  // filterCat value — that'd make the view narrower than what the user sees.
+  // state.filterCat is preserved so toggling back to category mode restores
+  // the previous filter.
+  var applyCatFilter = state.groupBy === 'category';
   return state.ports.filter(function(p) {
-    if (state.filterCat !== 'All' && p.category !== state.filterCat) return false;
+    if (applyCatFilter && state.filterCat !== 'All' && p.category !== state.filterCat) return false;
     if (state.search) {
       var s = state.search.toLowerCase();
       return p.process.toLowerCase().indexOf(s) !== -1 || String(p.port).indexOf(s) !== -1 || p.command.toLowerCase().indexOf(s) !== -1;
@@ -554,6 +611,35 @@ function getFiltered() {
   });
 }
 function getGrouped(filtered) { var g = {}; for (var i = 0; i < filtered.length; i++) { var p = filtered[i]; if (!g[p.category]) g[p.category] = []; g[p.category].push(p); } return g; }
+function basename(path) {
+  if (!path) return '';
+  // Trim trailing slash, split, return last non-empty segment
+  var trimmed = path.replace(/\/+$/, '');
+  var i = trimmed.lastIndexOf('/');
+  return i >= 0 ? trimmed.substring(i + 1) : trimmed;
+}
+// Returns a sorted array of { key, label, path, items, isUnassigned }.
+// Projects are alphabetical by path; Unassigned is always last.
+function getGroupedByProject(filtered) {
+  var byProject = {};
+  for (var i = 0; i < filtered.length; i++) {
+    var p = filtered[i];
+    var bucketKey = p.project ? p.project : '__unassigned__';
+    if (!byProject[bucketKey]) byProject[bucketKey] = [];
+    byProject[bucketKey].push(p);
+  }
+  var keys = [];
+  for (var k in byProject) { if (k !== '__unassigned__') keys.push(k); }
+  keys.sort();
+  var result = [];
+  for (var j = 0; j < keys.length; j++) {
+    result.push({ key: keys[j], label: basename(keys[j]) || keys[j], path: keys[j], items: byProject[keys[j]], isUnassigned: false });
+  }
+  if (byProject['__unassigned__']) {
+    result.push({ key: '__unassigned__', label: 'Unassigned', path: null, items: byProject['__unassigned__'], isUnassigned: true });
+  }
+  return result;
+}
 function getCatCounts() { var c = {}; for (var i = 0; i < state.ports.length; i++) { c[state.ports[i].category] = (c[state.ports[i].category] || 0) + 1; } return c; }
 function getSelectedPorts() { return state.ports.filter(function(p) { return state.selected[p.pid]; }); }
 function getFilteredHistory() {
@@ -654,6 +740,49 @@ function stopAgent(label) {
   }).catch(function(e) { showToast('Stop failed: ' + e, 'error'); });
 }
 
+// ─── Render helpers ────────────────────────────────────────────────────────
+// Builds one port row. Extracted so Category and Project branches share it.
+// `portColor` tints the port-number button — use the category color in
+// category mode; project mode passes the port's own category color so rows
+// stay visually scannable.
+function renderPortRow(p, sel, portColor) {
+  var html = '';
+  html += '<div class="port-row" onclick="toggleSelect(' + p.pid + ')">';
+  html += '<div class="checkbox' + (sel ? ' checked' : '') + '" onclick="event.stopPropagation();toggleSelect(' + p.pid + ')">' + (sel ? '&#10003;' : '') + '</div>';
+  html += '<button class="port-num-btn" style="color:' + portColor + '" onclick="event.stopPropagation();copyToClipboard(\':' + p.port + '\')" title="Copy :' + p.port + '">:' + p.port + '</button>';
+  html += '<div style="min-width:0"><div class="proc-name">' + esc(p.process);
+  var isSys = p.user === 'root' || (p.user && p.user.charAt(0) === '_');
+  if (p.user) html += '<span class="proc-user' + (isSys ? ' sys' : '') + '">· ' + esc(p.user) + '</span>';
+  if (isSys) html += ' <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" title="System user — kill with caution" style="display:inline-block;vertical-align:middle;margin-left:2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+  if (p.is_orphan) {
+    html += ' <span class="meta-tag" style="background:' + rgbaFrom('#ef4444', 0.12) + ';color:var(--red)" title="No parent process, no controlling terminal, not managed by launchd">orphan</span>';
+  }
+  if (p.docker_container) {
+    var cname = extractContainerName(p.docker_container);
+    html += ' <span class="meta-tag" style="background:' + rgbaFrom('#a78bfa', 0.15) + ';color:#a78bfa" title="' + esc(p.docker_container) + '">' + esc(cname) + '</span>';
+  }
+  if (p.launch_agent) {
+    html += ' <span class="meta-tag meta-tag-clickable" style="background:' + rgbaFrom('#60a5fa', 0.12) + ';color:#60a5fa" title="Managed by launchd: ' + esc(p.launch_agent) + '. Click to stop." onclick="event.stopPropagation();stopAgent(\'' + esc(p.launch_agent) + '\')">managed</span>';
+  }
+  html += '</div>';
+  html += '<div class="proc-cmd">' + esc(p.docker_container ? p.exe_path + ' — ' + p.docker_container : p.exe_path) + '</div>';
+  html += '</div>';
+  var memStr = p.memory_mb < 0 ? 'N/A' : (p.memory_mb < 1 ? '< 1M' : p.memory_mb.toFixed(0) + 'M');
+  html += '<span class="cpu-label">-</span>';
+  html += '<span class="mem-label">' + memStr + '</span>';
+  html += '<button class="pid-btn" onclick="event.stopPropagation();copyToClipboard(\'' + p.pid + '\')" title="Copy PID ' + p.pid + '">' + p.pid + '</button>';
+  html += '<span class="uptime-label">' + esc(p.uptime || 'N/A') + '</span>';
+  html += '<button class="copy-url-btn" onclick="event.stopPropagation();copyToClipboard(\'http://localhost:' + p.port + '\')" title="Copy URL (localhost:' + p.port + ')">';
+  html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/></svg>';
+  html += '</button>';
+  html += '<button class="copy-path-btn" onclick="event.stopPropagation();copyToClipboard(\'' + esc(p.exe_path || p.command) + '\')" title="Copy path (' + esc(p.exe_path || p.command) + ')">';
+  html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/><path d="M8 9.5l1.5 1.5L8 12.5" stroke-width="1.2"/></svg>';
+  html += '</button>';
+  html += '<button class="kill-single" onclick="event.stopPropagation();openModal(\'single\',null,' + p.pid + ')" title="Kill process (' + esc(p.process) + ' PID ' + p.pid + ')">&#10005;</button>';
+  html += '</div>';
+  return html;
+}
+
 // ─── Render ────────────────────────────────────────────────────────────────
 function render() {
   var filtered = getFiltered();
@@ -738,30 +867,90 @@ function render() {
   }
 
   if (state.view === 'ports') {
-    // Category filter bar
-    html += '<div class="cat-bar">';
-    html += '<button class="cat-tab' + (state.filterCat === 'All' ? ' active' : '') + '" onclick="onFilter(\'All\')">All <span class="cat-count">' + state.ports.length + '</span></button>';
-    for (var ti = 0; ti < catKeys.length; ti++) {
-      var cat = catKeys[ti], info = CATEGORIES[cat], count = catCounts[cat] || 0;
-      if (count === 0) continue;
-      var isA = state.filterCat === cat;
-      html += '<button class="cat-tab' + (isA ? ' active' : '') + '"';
-      if (isA) html += ' style="border-bottom-color:' + info.color + ';color:' + info.color + '"';
-      html += ' onclick="onFilter(\'' + esc(cat) + '\')">';
-      html += catIconSvg(cat, 12) + ' ' + esc(cat);
-      html += '<span class="cat-count"' + (isA ? ' style="background:' + rgbaFrom(info.color, 0.15) + ';color:' + info.color + '"' : '') + '>' + count + '</span></button>';
+    // Group-by segmented toggle (Category / Project)
+    html += '<div class="group-toggle">';
+    html += '<span class="group-toggle-label">Group by</span>';
+    html += '<div class="group-seg">';
+    html += '<button class="group-seg-btn' + (state.groupBy === 'category' ? ' active' : '') + '" onclick="setGroupBy(\'category\')">Category</button>';
+    html += '<button class="group-seg-btn' + (state.groupBy === 'project' ? ' active' : '') + '" onclick="setGroupBy(\'project\')">Project</button>';
+    html += '</div></div>';
+
+    // Category filter bar (hidden in project mode — avoids confusing dual-axis filtering)
+    if (state.groupBy === 'category') {
+      html += '<div class="cat-bar">';
+      html += '<button class="cat-tab' + (state.filterCat === 'All' ? ' active' : '') + '" onclick="onFilter(\'All\')">All <span class="cat-count">' + state.ports.length + '</span></button>';
+      for (var ti = 0; ti < catKeys.length; ti++) {
+        var cat = catKeys[ti], info = CATEGORIES[cat], count = catCounts[cat] || 0;
+        if (count === 0) continue;
+        var isA = state.filterCat === cat;
+        html += '<button class="cat-tab' + (isA ? ' active' : '') + '"';
+        if (isA) html += ' style="border-bottom-color:' + info.color + ';color:' + info.color + '"';
+        html += ' onclick="onFilter(\'' + esc(cat) + '\')">';
+        html += catIconSvg(cat, 12) + ' ' + esc(cat);
+        html += '<span class="cat-count"' + (isA ? ' style="background:' + rgbaFrom(info.color, 0.15) + ';color:' + info.color + '"' : '') + '>' + count + '</span></button>';
+      }
+      html += '</div>';
     }
-    html += '</div>';
 
     // Port list
     html += '<div class="port-list">';
+    var projectGroups = state.groupBy === 'project' ? getGroupedByProject(filtered) : null;
+    var hasAnyPorts = state.groupBy === 'project'
+      ? (projectGroups && projectGroups.length > 0)
+      : (Object.keys(grouped).length > 0);
+
     if (state.scanning) {
       html += '<div class="group"><div class="group-table">';
       for (var si = 0; si < 6; si++) html += '<div class="skeleton-row"></div>';
       html += '</div></div>';
-    } else if (Object.keys(grouped).length === 0) {
+    } else if (!hasAnyPorts) {
       html += '<div class="empty"><div class="empty-icon">' + (state.search ? '&#128269;' : '&#127881;') + '</div>';
-      html += '<p>' + (state.search ? 'No ports match your search.' : 'No open ports found.') + '</p></div>';
+      if (state.search) {
+        html += '<p>No ports match your search.</p>';
+      } else if (state.groupBy === 'project') {
+        html += '<p>No projects detected. Try switching to <a href="#" onclick="event.preventDefault();setGroupBy(\'category\')" style="color:var(--accent);text-decoration:none">Category</a> grouping.</p>';
+      } else {
+        html += '<p>No open ports found.</p>';
+      }
+      html += '</div>';
+    } else if (state.groupBy === 'project') {
+      // ─── Project grouping branch ──────────────────────────────────────────
+      for (var pg = 0; pg < projectGroups.length; pg++) {
+        var grp = projectGroups[pg];
+        var pItems = grp.items;
+        var pAllSel = pItems.every(function(p) { return state.selected[p.pid]; });
+        // All project groups share the accent color (except Unassigned → dim)
+        var pColor = grp.isUnassigned ? '#8b8b9e' : '#6366f1';
+
+        html += '<div class="group"><div class="group-header project-header"><div class="group-header-left">';
+        html += '<div class="checkbox' + (pAllSel ? ' checked' : '') + '" onclick="toggleProjectGroup(\'' + esc(grp.key) + '\')">' + (pAllSel ? '&#10003;' : '') + '</div>';
+        // Folder icon (closed folder outline)
+        html += '<svg class="proj-folder' + (grp.isUnassigned ? ' unassigned' : '') + '" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
+        if (grp.isUnassigned) {
+          html += '<span class="proj-basename unassigned" title="Ports whose process is not running from within a git repository">' + esc(grp.label) + '</span>';
+        } else {
+          html += '<button class="proj-basename" onclick="copyToClipboard(\'' + esc(grp.path) + '\')" title="' + esc(grp.path) + ' (click to copy full path)">' + esc(grp.label) + '</button>';
+          // Truncated path hint next to basename, for context at a glance
+          html += '<span class="proj-path-hint" title="' + esc(grp.path) + '">' + esc(grp.path) + '</span>';
+        }
+        html += '<span class="group-count">' + pItems.length + '</span></div>';
+        // Kill-project button (disabled / hidden for Unassigned — killing "not in a repo" makes no intuitive sense)
+        if (!grp.isUnassigned) {
+          html += '<button class="btn btn-sm" style="background:' + rgbaFrom(pColor, 0.08) + ';color:' + pColor + ';border:1px solid ' + rgbaFrom(pColor, 0.2) + '"';
+          html += ' onclick="openModal(\'project\',\'' + esc(grp.key) + '\')" title="Kill all ports belonging to ' + esc(grp.label) + '">Kill project</button>';
+        }
+        html += '</div>';
+
+        html += '<div class="group-table">';
+        html += '<div class="col-header"><span></span><span>Port</span><span>Process</span><span class="col-right">CPU</span><span class="col-right">Mem</span><span class="col-right">PID</span><span class="col-right">Up</span><span></span><span></span><span></span></div>';
+
+        for (var pi2 = 0; pi2 < pItems.length; pi2++) {
+          var p2 = pItems[pi2], sel2 = state.selected[p2.pid];
+          var rowCat = CATEGORIES[p2.category] || CATEGORIES["Other"];
+          html += renderPortRow(p2, sel2, rowCat.color);
+        }
+        html += '</div></div>';
+      }
     } else {
       var catOrder = catKeys.concat(["Other"]);
       for (var ci = 0; ci < catOrder.length; ci++) {
@@ -781,43 +970,7 @@ function render() {
         html += '<div class="col-header"><span></span><span>Port</span><span>Process</span><span class="col-right">CPU</span><span class="col-right">Mem</span><span class="col-right">PID</span><span class="col-right">Up</span><span></span><span></span><span></span></div>';
 
         for (var pi = 0; pi < items.length; pi++) {
-          var p = items[pi], sel = state.selected[p.pid];
-          html += '<div class="port-row" onclick="toggleSelect(' + p.pid + ')">';
-          html += '<div class="checkbox' + (sel ? ' checked' : '') + '" onclick="event.stopPropagation();toggleSelect(' + p.pid + ')">' + (sel ? '&#10003;' : '') + '</div>';
-          html += '<button class="port-num-btn" style="color:' + catInfo.color + '" onclick="event.stopPropagation();copyToClipboard(\':' + p.port + '\')" title="Copy :' + p.port + '">:' + p.port + '</button>';
-          html += '<div style="min-width:0"><div class="proc-name">' + esc(p.process);
-          var isSys = p.user === 'root' || (p.user && p.user.charAt(0) === '_');
-          if (p.user) html += '<span class="proc-user' + (isSys ? ' sys' : '') + '">· ' + esc(p.user) + '</span>';
-          if (isSys) html += ' <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" title="System user — kill with caution" style="display:inline-block;vertical-align:middle;margin-left:2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
-
-          // Tags — only shown when provably accurate
-          if (p.is_orphan) {
-            html += ' <span class="meta-tag" style="background:' + rgbaFrom('#ef4444', 0.12) + ';color:var(--red)" title="No parent process, no controlling terminal, not managed by launchd">orphan</span>';
-          }
-          if (p.docker_container) {
-            var cname = extractContainerName(p.docker_container);
-            html += ' <span class="meta-tag" style="background:' + rgbaFrom('#a78bfa', 0.15) + ';color:#a78bfa" title="' + esc(p.docker_container) + '">' + esc(cname) + '</span>';
-          }
-          if (p.launch_agent) {
-            html += ' <span class="meta-tag meta-tag-clickable" style="background:' + rgbaFrom('#60a5fa', 0.12) + ';color:#60a5fa" title="Managed by launchd: ' + esc(p.launch_agent) + '. Click to stop." onclick="event.stopPropagation();stopAgent(\'' + esc(p.launch_agent) + '\')">managed</span>';
-          }
-
-          html += '</div>';
-          html += '<div class="proc-cmd">' + esc(p.docker_container ? p.exe_path + ' — ' + p.docker_container : p.exe_path) + '</div>';
-          html += '</div>';
-          var memStr = p.memory_mb < 0 ? 'N/A' : (p.memory_mb < 1 ? '< 1M' : p.memory_mb.toFixed(0) + 'M');
-          html += '<span class="cpu-label">-</span>';
-          html += '<span class="mem-label">' + memStr + '</span>';
-          html += '<button class="pid-btn" onclick="event.stopPropagation();copyToClipboard(\'' + p.pid + '\')" title="Copy PID ' + p.pid + '">' + p.pid + '</button>';
-          html += '<span class="uptime-label">' + esc(p.uptime || 'N/A') + '</span>';
-          html += '<button class="copy-url-btn" onclick="event.stopPropagation();copyToClipboard(\'http://localhost:' + p.port + '\')" title="Copy URL (localhost:' + p.port + ')">';
-          html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/></svg>';
-          html += '</button>';
-          html += '<button class="copy-path-btn" onclick="event.stopPropagation();copyToClipboard(\'' + esc(p.exe_path || p.command) + '\')" title="Copy path (' + esc(p.exe_path || p.command) + ')">';
-          html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V3.5a1.5 1.5 0 011.5-1.5h7"/><path d="M8 9.5l1.5 1.5L8 12.5" stroke-width="1.2"/></svg>';
-          html += '</button>';
-          html += '<button class="kill-single" onclick="event.stopPropagation();openModal(\'single\',null,' + p.pid + ')" title="Kill process (' + esc(p.process) + ' PID ' + p.pid + ')">&#10005;</button>';
-          html += '</div>';
+          html += renderPortRow(items[pi], state.selected[items[pi].pid], catInfo.color);
         }
         html += '</div></div>';
       }
@@ -931,10 +1084,35 @@ function toggleGroup(catName) {
   for (var i = 0; i < items.length; i++) { if (allSel) delete state.selected[items[i].pid]; else state.selected[items[i].pid] = true; }
   render();
 }
-function openModal(mode, catName, pid) {
+function toggleProjectGroup(projectKey) {
+  // projectKey is either the full project path or '__unassigned__'
+  var items = state.ports.filter(function(p) {
+    if (projectKey === '__unassigned__') return !p.project;
+    return p.project === projectKey;
+  });
+  if (items.length === 0) return;
+  var allSel = items.every(function(p) { return state.selected[p.pid]; });
+  for (var i = 0; i < items.length; i++) { if (allSel) delete state.selected[items[i].pid]; else state.selected[items[i].pid] = true; }
+  render();
+}
+function setGroupBy(mode) {
+  if (mode !== 'category' && mode !== 'project') return;
+  if (state.groupBy === mode) return;
+  state.groupBy = mode;
+  try { localStorage.setItem('pm-grouping', mode); } catch(e) {}
+  // When switching to project mode, reset the category filter so project view
+  // isn't secretly filtered by a hidden tab. The user's filterCat is preserved
+  // for when they toggle back — it only becomes 'All' if we explicitly reset.
+  render();
+}
+function openModal(mode, scopeKey, pid) {
   var targets;
   if (mode === 'single') targets = state.ports.filter(function(p) { return p.pid === pid; });
-  else if (mode === 'group') targets = state.ports.filter(function(p) { return p.category === catName; });
+  else if (mode === 'group') targets = state.ports.filter(function(p) { return p.category === scopeKey; });
+  else if (mode === 'project') targets = state.ports.filter(function(p) {
+    if (scopeKey === '__unassigned__') return !p.project;
+    return p.project === scopeKey;
+  });
   else targets = getSelectedPorts();
   if (targets.length === 0) return;
   state.modal = { targets: targets, force: false }; render();

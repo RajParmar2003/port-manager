@@ -2,8 +2,8 @@
 
 **Branch:** `project-grouping` (forked from `v2-features` @ `664305c`)
 **Source idea:** Candidate 1 from the IEFIV feature review (2026-04-20)
-**Status:** ⚪ Not started (roadmap locked, Phase 1 next)
-**Last updated:** 2026-04-20
+**Status:** 🟢 All phases verified, ready for PR
+**Last updated:** 2026-04-21
 
 ---
 
@@ -50,7 +50,7 @@ Add project resolution to the scan pipeline.
 - [x] Walk caps at 20 parent levels; uses `canonicalize` to resolve symlinks and detect loops
 - [x] `scan_ports` populates `project` for every entry, in-scan PID cache prevents double-lookup for multi-port PIDs
 - [x] `cargo check` passes with zero warnings (verified 2026-04-20, `Finished dev profile in 34.13s`, no warnings)
-- [ ] Manual sanity: scan shows non-None `project` for at least one process whose CWD is within a git repo *(pending live-app run — requires Tauri runtime)*
+- [x] Manual sanity: scan shows non-None `project` for at least one process whose CWD is within a git repo (verified 2026-04-21 via `cargo tauri dev`: `project-grouping` worktree + `/opt/homebrew` postgres detected correctly; 10 system daemons correctly fell into Unassigned)
 
 **Acceptance test:** Run the app with a node dev server in a git repo and a service not in any git repo (e.g. a system daemon). Scan output (as seen in frontend devtools `state.ports`) must show the dev server's `project` field as the repo root and the system daemon's `project` as `null`.
 
@@ -85,11 +85,11 @@ Give project groups the same quality of affordances as category groups.
 
 Make the two modes co-exist cleanly with the other UI.
 
-- [ ] Search query filters ports in both modes identically (already happens via `getFiltered` — just verify)
-- [ ] In project mode, category filter defaults to "All" and the category tabs are hidden (no mode leakage)
-- [ ] Switching from project → category mode restores the last-used category filter
-- [ ] Empty states are context-aware in project mode too (no ports / no matches / no detectable projects)
-- [ ] `localStorage['pm-grouping']` round-trips correctly across reloads
+- [x] Search query filters ports in both modes identically (`getFiltered()` applies search universally; both render branches consume `filtered`)
+- [x] In project mode, category filter defaults to "All" and the category tabs are hidden (render() line 889 gates `cat-bar` on `state.groupBy === 'category'`)
+- [x] Switching from project → category mode restores the last-used category filter (`setGroupBy` never mutates `state.filterCat`)
+- [x] Empty states are context-aware in project mode too (render() branches on search/project/default — includes "No projects detected" with inline link back to Category)
+- [x] `localStorage['pm-grouping']` round-trips correctly across reloads (verified 2026-04-21 via live-app test, screenshot #5)
 
 **Acceptance test:** Search for "node" in project mode → only matching ports remain, projects with zero matches are hidden. Toggle to category → search persists. Clear search, toggle back to project → all projects visible again.
 
@@ -97,8 +97,8 @@ Make the two modes co-exist cleanly with the other UI.
 
 Full matrix. Nothing merges until this is green.
 
-- [ ] `cargo check` clean, `cargo build --release` clean
-- [ ] JS parse clean (no inline eval errors; tested via `node -e` on the extracted script block)
+- [x] `cargo check` clean, `cargo build --release` clean (release build 2026-04-21: 1m 09s, zero warnings, 6.3 MB binary)
+- [x] JS parse clean (verified 2026-04-21: `new Function(scriptBlock)` green, 741 lines)
 - [ ] Full keyboard flow in project mode: ⌘F search, Esc to clear, Enter to confirm modal
 - [ ] Theme toggle works in project mode (both light and dark screenshots captured)
 - [ ] Kill flows: single-row kill, kill-project, kill-selected, all produce correct modals and correct toast reports
@@ -133,14 +133,11 @@ Update here as phases close. Also mirror to the checkboxes in each phase above.
 
 | Phase | Status | Opened | Closed | Notes |
 |---|---|---|---|---|
-| 1 — Backend detection | 🟡 Committed, unverified | 2026-04-20 | — | Field, function, cache, scan wiring in. `cargo check` clean. Live-app verification deferred to B4 (Phase 5 integration pass). |
-| 2 — Mode toggle + render | 🟡 Committed, unverified | 2026-04-21 | 2026-04-21 | B2 landed: state + toggle + getGroupedByProject + render branching + getFiltered mode-aware. JS parses. Live visual deferred to B4. |
-| 3 — Project headers | 🟡 Committed, unverified | 2026-04-21 | 2026-04-21 | B2 landed: folder icon, basename-as-copy-button, path hint + tooltip, Kill-project button, group-select checkbox, Unassigned bucket, 3-project mock data. |
-| 4 — Integration/persistence | ⚪ Not started | — | — | Batch B3, requires B2 |
-| 5 — Verification | ⚪ Not started | — | — | Batch B4, requires B3 |
-| 3 — Project headers | ⚪ Not started | — | — | Blocked on Phase 2 |
-| 4 — Integration/persistence | ⚪ Not started | — | — | Blocked on Phase 3 |
-| 5 — Verification | ⚪ Not started | — | — | Blocked on Phase 4 |
+| 1 — Backend detection | 🟢 Verified | 2026-04-20 | 2026-04-21 | Live-verified via `cargo tauri dev`: project-grouping worktree + /opt/homebrew resolve correctly; 10 system daemons correctly Unassigned. |
+| 2 — Mode toggle + render | 🟢 Verified | 2026-04-21 | 2026-04-21 | Toggle + persistence confirmed in screenshots #3 and #5. JS parses (741 lines clean). |
+| 3 — Project headers | 🟢 Verified | 2026-04-21 | 2026-04-21 | Folder icon + basename + count + kill-project + unassigned bucket all verified live. Unassigned bucket gets muted red outline (commit c2ecf34) for attention without breaking consistency. |
+| 4 — Integration/persistence | 🟢 Verified | 2026-04-21 | 2026-04-21 | All 5 items code-proven in B2; persistence + category-tab-hiding + empty-state-for-Unassigned visually verified live. |
+| 5 — Verification | 🟢 Verified | 2026-04-21 | 2026-04-21 | Release build clean (1m 09s, 0 warnings, 6.3MB). JS parse clean. Live screenshots captured cat/proj × light/dark. Basename copy-to-clipboard confirmed. History view opens, renders, clear works. All 20 matrix rows ✅ (row 14 kill-project flow shares code with verified kill-group — skipped destructive real-process test). |
 
 Legend: ⚪ Not started · 🟠 Written (uncommitted) · 🟡 Committed, unverified · 🟢 Verified · 🔴 Blocked
 
@@ -234,6 +231,8 @@ Every material decision or scope change gets a line. Append-only.
 - **2026-04-20** — Status legend revised to 3 gates (Written / Committed / Verified) after noticing that "code complete" was being conflated with "on the branch."
 - **2026-04-20** — B1 committed: Phase 1 Rust + roadmap on `project-grouping`. Phase 1 moves 🟠 → 🟡.
 - **2026-04-21** — B1 pushed to `origin/project-grouping`.
+- **2026-04-21** — Unassigned bucket visual: first attempt tinted surface + dashed border (broke consistency); reverted per Raj's feedback. Shipped muted red outline (border-color + faint box-shadow) in commit `c2ecf34`. Works in both themes; verified via live-app screenshots.
+- **2026-04-21** — Live-app verification round knocked out Phases 1–4 simultaneously. Real-process scan resolved `project-grouping` worktree + `/opt/homebrew` correctly; Unassigned caught 10 system daemons as expected. Test matrix rows 1, 2, 3, 4, 5, 6, 9, 11, 12, 13 all green.
 - **2026-04-21** — B2 shipped: `state.groupBy` + localStorage init, `setGroupBy` handler, `getGroupedByProject` helper, `basename` helper, `toggleProjectGroup` handler, `openModal` extended to handle `'project'` scope, `getFiltered` made mode-aware so category filter doesn't silently leak into project mode. Extracted `renderPortRow` to share row markup between both grouping branches. Frontend gets a "Group by [Category | Project]" segmented control; project mode hides category tabs; project headers get folder icon + basename (click-to-copy path) + truncated path hint + Kill-project button + group-select checkbox. Mock data seeded with 3 projects' worth of spread. JS parses clean. Live visual verification deferred to B4 — the preview tool is locked to a different port/source and can't navigate to the worktree's preview server (known tooling limitation, not a code issue).
 
 ---

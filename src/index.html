@@ -58,18 +58,14 @@
 
     /* Titlebar drag region */
     .titlebar {
-      height: 38px;
+      height: 28px;
       -webkit-app-region: drag;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       position: sticky;
       top: 0;
       z-index: 100;
       background: var(--bg);
       border-bottom: 1px solid var(--border);
     }
-    .titlebar span { font-size: 12px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.3px; }
 
     /* Layout */
     .header {
@@ -128,7 +124,8 @@
     .search-wrap { position: relative; }
     .search-icon {
       position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-      color: var(--text-dim); font-size: 14px; pointer-events: none;
+      color: var(--text-dim); pointer-events: none;
+      display: flex; align-items: center;
     }
     .search-input {
       width: 100%;
@@ -162,7 +159,8 @@
 
     /* Port list */
     .port-list { padding: 16px 24px 90px; }
-    .group { margin-bottom: 20px; animation: fadeIn 0.3s ease both; }
+    .group { margin-bottom: 20px; }
+    .group.first-paint { animation: fadeIn 0.3s ease both; }
     .group-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 8px; padding: 0 4px;
@@ -177,11 +175,12 @@
 
     .port-row {
       display: grid;
-      grid-template-columns: 30px 60px 1fr 100px 72px 36px;
+      grid-template-columns: 30px 60px 1fr 56px 72px 36px;
       align-items: center; gap: 10px; padding: 10px 14px;
       border-bottom: 1px solid var(--border);
-      transition: background 0.12s; cursor: pointer;
+      transition: background 0.12s;
     }
+    .port-list.scanning .group { opacity: 0.55; pointer-events: none; }
     .port-row:last-child { border-bottom: none; }
     .port-row:hover { background: var(--surface-hover); }
     .port-num { font-family: var(--mono); font-size: 13px; font-weight: 600; }
@@ -196,10 +195,11 @@
       width: 28px; height: 28px; border-radius: 6px;
       background: rgba(239, 68, 68, 0.12); color: var(--red);
       font-size: 13px; display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.12s;
+      opacity: 0.35; transition: opacity 0.12s, background 0.12s, color 0.12s;
     }
     .port-row:hover .kill-single { opacity: 1; }
-    .kill-single:hover { background: var(--red); color: #fff; }
+    .kill-single:hover { background: var(--red); color: #fff; opacity: 1; }
+    .kill-single:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
 
     /* Badge */
     .badge {
@@ -240,8 +240,12 @@
       font-size: 12.5px; border-bottom: 1px solid var(--border);
     }
     .modal-list-item:last-child { border-bottom: none; }
-    .modal-list-item .ml-name { font-weight: 600; }
-    .modal-list-item .ml-detail { color: var(--text-dim); font-family: var(--mono); }
+    .modal-list-item .ml-name {
+      font-weight: 600; min-width: 0; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+      max-width: 55%;
+    }
+    .modal-list-item .ml-detail { color: var(--text-dim); font-family: var(--mono); flex-shrink: 0; }
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
     .modal .force-toggle {
       display: flex; align-items: center; gap: 8px;
@@ -253,14 +257,23 @@
     .toast {
       position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%);
       background: var(--surface); border: 1px solid var(--border);
-      padding: 10px 20px; border-radius: var(--radius);
+      padding: 10px 16px 10px 20px; border-radius: var(--radius);
       font-size: 13px; font-weight: 600;
       box-shadow: 0 12px 40px rgba(0,0,0,0.35); z-index: 1000;
-      display: flex; align-items: center; gap: 8px; animation: toastIn 0.25s ease;
+      display: flex; align-items: flex-start; gap: 10px; animation: toastIn 0.25s ease;
+      max-width: min(560px, 90vw);
+      white-space: normal; word-break: break-word; line-height: 1.45;
     }
-    .toast.error { border-color: rgba(239, 68, 68, 0.3); }
+    .toast-message { flex: 1; min-width: 0; }
+    .toast.error { border-color: rgba(239, 68, 68, 0.45); }
     .toast.error .toast-icon { color: var(--red); }
-    .toast .toast-icon { color: var(--green); }
+    .toast .toast-icon { color: var(--green); flex-shrink: 0; margin-top: 1px; }
+    .toast-close {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .toast-close:hover { color: var(--text); }
 
     /* Empty state */
     .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
@@ -296,6 +309,139 @@
       background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);
       color: var(--red); font-family: var(--mono); font-size: 13px;
       white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* Theme toggle icon */
+    .theme-icon { width: 16px; height: 16px; display: block; }
+
+    /* Bulk action bar */
+    .bulk-bar {
+      position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 8px 6px 16px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      z-index: 500; animation: toastIn 0.2s ease;
+    }
+    .bulk-bar-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+
+    /* Category icons */
+    .cat-icon { display: inline-block; vertical-align: -2px; }
+
+    /* Copy-to-clipboard affordance */
+    .copyable {
+      background: none; border: none; padding: 0; margin: 0;
+      font: inherit; color: inherit; cursor: copy;
+      border-radius: 3px;
+    }
+    .copyable:hover { background: var(--surface-hover); box-shadow: 0 0 0 3px var(--surface-hover); }
+    .copyable:focus { outline: 1px dashed var(--accent); outline-offset: 2px; }
+    .proc-cmd.copyable { max-width: 100%; display: inline-block; }
+    .proc-cmd.copyable:hover { text-decoration: underline; text-decoration-style: dotted; }
+
+    /* User label next to process name */
+    .proc-user {
+      font-size: 11px; color: var(--text-dim); font-weight: 400;
+      margin-left: 6px;
+    }
+    .sys-shield {
+      display: inline-block; vertical-align: -2px; margin-left: 4px;
+      color: #f59e42;
+    }
+
+    /* Sort select */
+    .sort-select {
+      font-family: var(--sans); font-size: 12px; font-weight: 600;
+      background: var(--surface); color: var(--text-dim);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; cursor: pointer; outline: none;
+      transition: all 0.15s;
+    }
+    .sort-select:hover { background: var(--surface-hover); color: var(--text); }
+    .sort-select:focus { border-color: var(--accent); }
+
+    /* Active-filter summary strip */
+    .filter-summary {
+      margin: 10px 24px 0; padding: 8px 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; font-size: 12px; color: var(--text-dim);
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .filter-summary strong { color: var(--text); font-weight: 600; }
+    .filter-chip {
+      background: var(--bg); padding: 2px 8px; border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .filter-summary .clear-all {
+      margin-left: auto; background: none; border: none;
+      color: var(--accent); font-size: 12px; font-weight: 600;
+      cursor: pointer; padding: 2px 4px;
+    }
+    .filter-summary .clear-all:hover { text-decoration: underline; }
+
+    /* Search clear button */
+    .search-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--border); color: var(--text); border: none;
+      font-size: 10px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .search-clear:hover { background: var(--text-dim); color: var(--bg); }
+
+    /* FREE port checker */
+    .free-checker {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px 0;
+    }
+    .free-input-wrap {
+      position: relative; flex: 0 0 auto;
+    }
+    .free-input {
+      width: 110px; padding: 5px 10px; font-size: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); outline: none;
+      transition: border-color 0.15s;
+    }
+    .free-input:focus { border-color: var(--accent); }
+    .free-input.is-free { border-color: #34d399; }
+    .free-input.is-used { border-color: var(--red); }
+    .free-btn {
+      padding: 5px 12px; font-size: 12px; border-radius: 6px; border: none;
+      background: var(--surface); color: var(--text-dim);
+      border: 1px solid var(--border); cursor: pointer; font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+    .free-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .free-result {
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .free-result.is-free { color: #34d399; }
+    .free-result.is-used { color: var(--red); }
+    .free-result.is-invalid { color: var(--text-dim); font-weight: 400; }
+
+    /* Modal helper copy */
+    .modal .signal-explain {
+      font-size: 11.5px; color: var(--text-dim);
+      margin-top: -2px; margin-bottom: 12px; line-height: 1.5;
+    }
+
+    /* Status footer bits */
+    .pulse-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); display: inline-block;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .pulse-dot.stale {
+      background: #f59e42;
+      animation: none;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    .footer-hint { display: inline-flex; align-items: center; gap: 8px; }
+    .spinner-sm {
+      display: inline-block; width: 10px; height: 10px;
+      border: 1.5px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
     }
   </style>
 </head>
@@ -372,14 +518,32 @@ function invokeCommand(cmd, args) {
 
 // ─── Category config ───────────────────────────────────────────────────────
 var CATEGORIES = {
-  "Dev Servers": { color: "#34d399", icon: "D" },
-  "Databases":   { color: "#f59e42", icon: "B" },
-  "Web / Proxy": { color: "#60a5fa", icon: "W" },
-  "Containers":  { color: "#a78bfa", icon: "C" },
-  "Apps":        { color: "#f472b6", icon: "A" },
-  "System":      { color: "#94a3b8", icon: "S" },
-  "Other":       { color: "#64748b", icon: "?" }
+  "Dev Servers": { color: "#34d399" },
+  "Databases":   { color: "#f59e42" },
+  "Web / Proxy": { color: "#60a5fa" },
+  "Containers":  { color: "#a78bfa" },
+  "Apps":        { color: "#f472b6" },
+  "System":      { color: "#94a3b8" },
+  "Other":       { color: "#64748b" }
 };
+
+// SVG icons per category. Rendered at 12x12 with stroke=currentColor so they
+// inherit the category accent colour from the surrounding text element.
+var CATEGORY_ICON_PATHS = {
+  "Dev Servers": '<polyline points="8 6 2 12 8 18"/><polyline points="16 6 22 12 16 18"/><line x1="14" y1="4" x2="10" y2="20"/>',
+  "Databases":   '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  "Web / Proxy": '<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a13.5 13.5 0 0 1 0 18M12 3a13.5 13.5 0 0 0 0 18"/>',
+  "Containers":  '<rect x="2" y="13" width="8" height="8" rx="1"/><rect x="14" y="13" width="8" height="8" rx="1"/><rect x="8" y="3" width="8" height="8" rx="1"/>',
+  "Apps":        '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  "System":      '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  "Other":       '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/>'
+};
+
+function categoryIconSvg(name, size) {
+  var s = size || 12;
+  var paths = CATEGORY_ICON_PATHS[name] || CATEGORY_ICON_PATHS["Other"];
+  return '<svg class="cat-icon" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+}
 
 // ─── App State ─────────────────────────────────────────────────────────────
 var state = {
@@ -390,8 +554,37 @@ var state = {
   scanning: false,
   modal: null,
   toast: null,
-  toastTimer: null
+  toastTimer: null,
+  sortKey: null,
+  sortDir: 'asc',
+  lastScanAt: null,
+  hasRendered: false,
+  freePort: '',
+  freeResult: null  // null=unchecked, 'free', 'used', 'invalid', 'checking'
 };
+
+function sortItems(items) {
+  if (!state.sortKey) return items;
+  var key = state.sortKey, dir = state.sortDir;
+  var mult = dir === 'asc' ? 1 : -1;
+  return items.slice().sort(function(a, b) {
+    var av = a[key], bv = b[key];
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    if (av < bv) return -1 * mult;
+    if (av > bv) return 1 * mult;
+    return 0;
+  });
+}
+
+function onSort(key) {
+  if (state.sortKey === key) {
+    if (state.sortDir === 'asc') state.sortDir = 'desc';
+    else { state.sortKey = null; state.sortDir = 'asc'; }
+  } else {
+    state.sortKey = key; state.sortDir = 'asc';
+  }
+  render();
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 function esc(str) {
@@ -402,10 +595,18 @@ function esc(str) {
 
 function showToast(message, type) {
   if (!type) type = 'success';
-  if (state.toastTimer) clearTimeout(state.toastTimer);
+  if (state.toastTimer) { clearTimeout(state.toastTimer); state.toastTimer = null; }
   state.toast = { message: message, type: type };
   render();
-  state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2800);
+  // Errors are sticky — user must dismiss them. Success toasts self-expire.
+  if (type !== 'error') {
+    state.toastTimer = setTimeout(function() { state.toast = null; render(); }, 2800);
+  }
+}
+
+function dismissToast() {
+  if (state.toastTimer) { clearTimeout(state.toastTimer); state.toastTimer = null; }
+  state.toast = null; render();
 }
 
 function getFiltered() {
@@ -463,7 +664,6 @@ var AUTO_SCAN_MS = 3000; // poll every 3 seconds
 
 function doScan() {
   state.scanning = true;
-  state.selected = {};
   render();
 
   invokeCommand('scan_ports').then(function(result) {
@@ -473,6 +673,7 @@ function doScan() {
     } else {
       showToast('Scan complete — ' + state.ports.length + ' open port' + (state.ports.length !== 1 ? 's' : '') + ' found');
     }
+    state.lastScanAt = Date.now();
     state.scanning = false;
     render();
     startAutoScan();
@@ -493,9 +694,12 @@ function doSilentScan() {
     // Detect if anything actually changed
     var oldKey = state.ports.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
     var newKey = newPorts.map(function(p) { return p.pid + ':' + p.port; }).sort().join(',');
+    state.lastScanAt = Date.now();
     if (oldKey !== newKey) {
       state.ports = newPorts;
       render();
+    } else {
+      updateFooterStatus();
     }
   }).catch(function() {}); // silently ignore errors on background scan
 }
@@ -546,8 +750,8 @@ function render() {
   var catKeys = Object.keys(CATEGORIES);
   var html = '';
 
-  // Titlebar
-  html += '<div class="titlebar"><span>Port Manager</span></div>';
+  // Titlebar (drag region only — no text; the H1 below is authoritative)
+  html += '<div class="titlebar"></div>';
 
   // Header
   html += '<div class="header">';
@@ -573,26 +777,45 @@ function render() {
   html += '<div class="subtitle">' + state.ports.length + ' open port' + (state.ports.length !== 1 ? 's' : '') + '</div>';
   html += '</div></div>';
   html += '<div class="header-actions">';
-  if (selPorts.length > 0) {
-    html += '<button class="btn btn-danger" onclick="openModal(\'selected\')">Kill ' + selPorts.length + ' selected</button>';
+  var sortValue = state.sortKey ? (state.sortKey + ':' + state.sortDir) : '';
+  html += '<select class="sort-select" title="Sort ports" onchange="setSortFromSelect(this.value)">';
+  html += '<option value=""' + (sortValue === '' ? ' selected' : '') + '>Sort: Default</option>';
+  var sortOpts = [
+    ['port:asc', 'Port ↑'], ['port:desc', 'Port ↓'],
+    ['process:asc', 'Process ↑'], ['process:desc', 'Process ↓'],
+    ['pid:asc', 'PID ↑'], ['pid:desc', 'PID ↓']
+  ];
+  for (var so = 0; so < sortOpts.length; so++) {
+    html += '<option value="' + sortOpts[so][0] + '"' + (sortValue === sortOpts[so][0] ? ' selected' : '') + '>' + sortOpts[so][1] + '</option>';
   }
-  html += '<button class="btn btn-surface" onclick="doScan()"' + (state.scanning ? ' disabled' : '') + '>';
-  if (state.scanning) {
-    html += '<span style="animation:spin 1s linear infinite;display:inline-block">&#8635;</span> Scanning...';
-  } else {
-    html += '&#8635; Rescan';
-  }
+  html += '</select>';
+  html += '<button class="btn btn-surface" onclick="doScan()" title="Rescan ports (⌘R)"' + (state.scanning ? ' disabled' : '') + '>';
+  html += '&#8635; Rescan';
   html += '</button>';
-  html += '<button class="btn-icon" onclick="toggleTheme()" title="Toggle theme">';
-  html += currentTheme === 'dark' ? '&#9788;' : '&#9790;';
+  html += '<button class="btn-icon" onclick="toggleTheme()" title="' + (currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') + '">';
+  if (currentTheme === 'dark') {
+    // Sun icon — filled center + dashed outer ring; reads clearly as sun at 16px
+    html += '<svg class="theme-icon" viewBox="0 0 24 24">';
+    html += '<circle cx="12" cy="12" r="5" fill="currentColor"/>';
+    html += '<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5" stroke-linecap="round"/>';
+    html += '</svg>';
+  } else {
+    // Moon icon (currently light → click to go dark)
+    html += '<svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+    html += '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    html += '</svg>';
+  }
   html += '</button>';
   html += '</div></div>';
 
   // Search
   html += '<div class="search-bar"><div class="search-wrap">';
-  html += '<span class="search-icon">&#x2315;</span>';
+  html += '<span class="search-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></span>';
   html += '<input class="search-input" type="text" placeholder="Search by process, port, or command..." ';
   html += 'value="' + esc(state.search) + '" oninput="onSearch(this.value)" />';
+  if (state.search) {
+    html += '<button class="search-clear" title="Clear search (Esc)" onclick="onSearch(\'\')">&#10005;</button>';
+  }
   html += '</div></div>';
 
   // Tabs
@@ -607,24 +830,75 @@ function render() {
     html += '<button class="tab' + (isActive ? ' active' : '') + '"';
     if (isActive) html += ' style="border-color:' + info.color + ';color:' + info.color + ';background:' + rgbaFrom(info.color, 0.1) + '"';
     html += ' onclick="onFilter(\'' + esc(cat) + '\')">';
-    html += '<span style="font-weight:800;color:' + info.color + '">' + info.icon + '</span> ' + esc(cat);
+    html += '<span style="color:' + info.color + ';display:inline-flex;align-items:center">' + categoryIconSvg(cat, 12) + '</span> ' + esc(cat);
     html += ' <span class="tab-count"';
     if (isActive) html += ' style="background:' + rgbaFrom(info.color, 0.2) + ';color:' + info.color + '"';
     html += '>' + count + '</span></button>';
   }
   html += '</div>';
 
-  // Port list
-  html += '<div class="port-list">';
+  // FREE port checker
+  html += '<div class="free-checker">';
+  html += '<div class="free-input-wrap">';
+  var freeClass = state.freeResult === 'free' ? ' is-free' : state.freeResult === 'used' ? ' is-used' : '';
+  html += '<input class="free-input' + freeClass + '" type="number" min="1" max="65535" placeholder="Check port…" ';
+  html += 'value="' + esc(state.freePort) + '" ';
+  html += 'oninput="onFreePortInput(this.value)" ';
+  html += 'onkeydown="if(event.key===\'Enter\')checkFreePort()" />';
+  html += '</div>';
+  html += '<button class="free-btn" onclick="checkFreePort()">Check</button>';
+  if (state.freeResult === 'free') {
+    html += '<span class="free-result is-free">&#10003; Free</span>';
+  } else if (state.freeResult === 'used') {
+    html += '<span class="free-result is-used">&#10005; In use</span>';
+  } else if (state.freeResult === 'checking') {
+    html += '<span class="free-result is-invalid">Checking…</span>';
+  } else if (state.freeResult === 'invalid') {
+    html += '<span class="free-result is-invalid">Enter 1–65535</span>';
+  }
+  html += '</div>';
 
-  if (state.scanning) {
+  // Active-filter summary
+  var hasFilter = state.filterCat !== 'All' || state.search || state.sortKey;
+  if (hasFilter && !state.scanning) {
+    html += '<div class="filter-summary">';
+    html += '<span>Showing <strong>' + filtered.length + '</strong> of <strong>' + state.ports.length + '</strong></span>';
+    if (state.filterCat !== 'All') {
+      html += '<span class="filter-chip">' + esc(state.filterCat) + '</span>';
+    }
+    if (state.search) {
+      html += '<span class="filter-chip">search: "' + esc(state.search) + '"</span>';
+    }
+    if (state.sortKey) {
+      var dirArrow = state.sortDir === 'asc' ? '↑' : '↓';
+      html += '<span class="filter-chip">sorted by ' + state.sortKey + ' ' + dirArrow + '</span>';
+    }
+    html += '<button class="clear-all" onclick="clearAllFilters()">Clear all</button>';
+    html += '</div>';
+  }
+
+  // Port list
+  var firstScan = state.scanning && state.ports.length === 0;
+  html += '<div class="port-list' + (state.scanning && !firstScan ? ' scanning' : '') + '">';
+
+  if (firstScan) {
     html += '<div class="group"><div class="group-table">';
     for (var si = 0; si < 6; si++) html += '<div class="skeleton-row"></div>';
     html += '</div></div>';
   } else if (Object.keys(grouped).length === 0) {
+    var msg;
+    if (state.search && state.filterCat !== 'All') {
+      msg = 'No ' + esc(state.filterCat) + ' ports match \u201C' + esc(state.search) + '\u201D.';
+    } else if (state.search) {
+      msg = 'No ports match \u201C' + esc(state.search) + '\u201D.';
+    } else if (state.filterCat !== 'All') {
+      msg = 'No open ports in ' + esc(state.filterCat) + '.';
+    } else {
+      msg = 'No open ports found. Start a dev server to see it here.';
+    }
     html += '<div class="empty">';
-    html += '<div class="empty-icon">' + (state.search ? '&#128269;' : '&#127881;') + '</div>';
-    html += '<p>' + (state.search ? 'No ports match your search.' : 'No open ports found.') + '</p>';
+    html += '<div class="empty-icon">' + ((state.search || state.filterCat !== 'All') ? '&#128269;' : '&#127881;') + '</div>';
+    html += '<p>' + msg + '</p>';
     html += '</div>';
   } else {
     var catOrder = catKeys.concat(["Other"]);
@@ -635,31 +909,39 @@ function render() {
       var catInfo = CATEGORIES[catName] || CATEGORIES["Other"];
       var allSel = items.every(function(p) { return state.selected[p.pid]; });
 
-      html += '<div class="group">';
+      html += '<div class="group' + (state.hasRendered ? '' : ' first-paint') + '">';
       html += '<div class="group-header">';
       html += '<div class="group-header-left">';
       html += '<div class="checkbox' + (allSel ? ' checked' : '') + '" onclick="toggleGroup(\'' + esc(catName) + '\')">' + (allSel ? '&#10003;' : '') + '</div>';
-      html += '<span class="group-label" style="color:' + catInfo.color + '">' + catInfo.icon + ' ' + esc(catName) + '</span>';
+      html += '<span class="group-label" style="color:' + catInfo.color + ';display:inline-flex;align-items:center;gap:6px">' + categoryIconSvg(catName, 13) + esc(catName) + '</span>';
       html += '<span class="group-count">' + items.length + '</span>';
       html += '</div>';
-      html += '<button class="btn btn-sm" style="background:' + rgbaFrom(catInfo.color, 0.08) + ';color:' + catInfo.color + ';border:1px solid ' + rgbaFrom(catInfo.color, 0.2) + '"';
-      html += ' onclick="openModal(\'group\', \'' + esc(catName) + '\')">Kill group</button>';
+      html += '<button class="btn btn-sm btn-danger" onclick="openModal(\'group\', \'' + esc(catName) + '\')">Kill group</button>';
       html += '</div>';
       html += '<div class="group-table">';
 
-      for (var pi = 0; pi < items.length; pi++) {
-        var p = items[pi];
+      var sortedItems = sortItems(items);
+      for (var pi = 0; pi < sortedItems.length; pi++) {
+        var p = sortedItems[pi];
         var sel = state.selected[p.pid];
-        html += '<div class="port-row" onclick="toggleSelect(' + p.pid + ')">';
-        html += '<div class="checkbox' + (sel ? ' checked' : '') + '" onclick="event.stopPropagation();toggleSelect(' + p.pid + ')">' + (sel ? '&#10003;' : '') + '</div>';
-        html += '<span class="port-num" style="color:' + catInfo.color + '">:' + p.port + '</span>';
+        var isSys = p.user === 'root' || (p.user && p.user.charAt(0) === '_');
+        html += '<div class="port-row">';
+        html += '<div class="checkbox' + (sel ? ' checked' : '') + '" title="Select row" onclick="toggleSelect(' + p.pid + ')">' + (sel ? '&#10003;' : '') + '</div>';
+        html += '<button class="port-num copyable" style="color:' + catInfo.color + '" title="Copy port" onclick="copyText(\':' + p.port + '\', \'port\')">:' + p.port + '</button>';
         html += '<div style="min-width:0">';
-        html += '<div class="proc-name">' + esc(p.process) + '</div>';
-        html += '<div class="proc-cmd">' + esc(p.command) + '</div>';
+        html += '<div class="proc-name">' + esc(p.process);
+        if (p.user) {
+          html += '<span class="proc-user">· ' + esc(p.user) + '</span>';
+        }
+        if (isSys) {
+          html += '<span class="sys-shield" title="System/root process — killing this may affect your system"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 5v6c0 5 3.5 9.4 8 11 4.5-1.6 8-6 8-11V5l-8-3z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="16" r="0.6" fill="currentColor"/></svg></span>';
+        }
+        html += '</div>';
+        html += '<button class="proc-cmd copyable" title="Click to copy: ' + esc(p.command) + '" onclick="copyText(' + JSON.stringify(p.command).replace(/"/g,'&quot;') + ', \'path\')">' + esc(p.command) + '</button>';
         html += '</div>';
         html += '<span class="badge" style="background:' + rgbaFrom(catInfo.color, 0.1) + ';color:' + catInfo.color + '">' + esc(p.protocol) + '</span>';
-        html += '<span class="pid-label">PID ' + p.pid + '</span>';
-        html += '<button class="kill-single" onclick="event.stopPropagation();openModal(\'single\',null,' + p.pid + ')">&#10005;</button>';
+        html += '<button class="pid-label copyable" title="Copy PID" onclick="copyText(\'' + p.pid + '\', \'PID\')">PID ' + p.pid + '</button>';
+        html += '<button class="kill-single" title="Kill ' + esc(p.process) + ' (PID ' + p.pid + ')" onclick="killSingle(' + p.pid + ')">&#10005;</button>';
         html += '</div>';
       }
 
@@ -669,29 +951,39 @@ function render() {
 
   html += '</div>';
 
-  // Footer
-  html += '<div class="footer"><div class="footer-hint">';
-  if (IS_TAURI) {
-    html += 'Connected to your computer';
-  } else {
-    html += 'Browser preview — using mock data';
+  // Footer (contents populated by updateFooterStatus)
+  html += '<div class="footer"><div class="footer-hint" id="footer-status"></div></div>';
+
+  // Sticky bulk action bar
+  if (selPorts.length > 0) {
+    html += '<div class="bulk-bar">';
+    html += '<span class="bulk-bar-label">' + selPorts.length + ' selected</span>';
+    html += '<button class="btn btn-sm btn-surface" onclick="clearSelection()">Clear</button>';
+    html += '<button class="btn btn-sm btn-danger" onclick="openModal(\'selected\')">Kill ' + selPorts.length + '</button>';
+    html += '</div>';
   }
-  html += '</div></div>';
 
   // Modal
   if (state.modal) {
     var targets = state.modal.targets;
     html += '<div class="modal-overlay" onclick="closeModal()">';
     html += '<div class="modal" onclick="event.stopPropagation()">';
-    html += '<h3>Kill ' + targets.length + ' port' + (targets.length > 1 ? 's' : '') + '?</h3>';
-    html += '<p>This will send <code style="background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px">';
-    html += state.modal.force ? 'SIGKILL (-9)' : 'SIGTERM (-15)';
-    html += '</code> to:</p>';
+    var modalTitle;
+    if (state.modal.mode === 'group') {
+      modalTitle = 'Kill all ' + esc(state.modal.catName) + ' processes?';
+    } else {
+      modalTitle = 'Kill ' + targets.length + ' port' + (targets.length > 1 ? 's' : '') + '?';
+    }
+    html += '<h3>' + modalTitle + '</h3>';
+    html += '<p>' + (state.modal.force
+      ? 'Sends <code style="background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px">SIGKILL</code> — immediate termination. The process can\u2019t clean up.'
+      : 'Sends <code style="background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px">SIGTERM</code> — a polite stop request. Most processes exit cleanly.') + '</p>';
+    html += '<p style="margin-top:4px">Targets:</p>';
     html += '<div class="modal-list">';
     for (var mi = 0; mi < targets.length; mi++) {
       var t = targets[mi];
       html += '<div class="modal-list-item">';
-      html += '<span class="ml-name">' + esc(t.process) + '</span>';
+      html += '<span class="ml-name" title="' + esc(t.process) + '">' + esc(t.process) + '</span>';
       html += '<span class="ml-detail">PID ' + t.pid + ' &rarr; :' + t.port + '</span>';
       html += '</div>';
     }
@@ -700,17 +992,22 @@ function render() {
     html += '<input type="checkbox" id="force-kill"' + (state.modal.force ? ' checked' : '') + ' onchange="toggleForce()" />';
     html += '<label for="force-kill">Force kill (SIGKILL)</label>';
     html += '</div>';
+    html += '<div class="signal-explain">Only use force if the process ignores a normal stop signal.</div>';
     html += '<div class="modal-actions">';
     html += '<button class="btn btn-surface" onclick="closeModal()">Cancel</button>';
-    html += '<button class="btn btn-danger" onclick="doKill()">Kill</button>';
+    html += '<button class="btn btn-danger" id="modal-kill-btn" onclick="doKill()">Kill</button>';
     html += '</div></div></div>';
   }
 
   // Toast
   if (state.toast) {
-    html += '<div class="toast' + (state.toast.type === 'error' ? ' error' : '') + '">';
-    html += '<span class="toast-icon">' + (state.toast.type === 'error' ? '&#10005;' : '&#10003;') + '</span>';
-    html += esc(state.toast.message);
+    var isErr = state.toast.type === 'error';
+    html += '<div class="toast' + (isErr ? ' error' : '') + '">';
+    html += '<span class="toast-icon">' + (isErr ? '&#10005;' : '&#10003;') + '</span>';
+    html += '<span class="toast-message">' + esc(state.toast.message) + '</span>';
+    if (isErr) {
+      html += '<button class="toast-close" title="Dismiss" onclick="dismissToast()">&#10005;</button>';
+    }
     html += '</div>';
   }
 
@@ -728,11 +1025,53 @@ function render() {
       if (cursorPos !== null) newSearch.setSelectionRange(cursorPos, cursorPos);
     }
   }
+
+  // Focus the destructive button when a modal is open so Enter confirms.
+  if (state.modal) {
+    var killBtn = document.getElementById('modal-kill-btn');
+    if (killBtn) killBtn.focus();
+  }
+
+  state.hasRendered = true;
 }
 
 // ─── Event handlers ────────────────────────────────────────────────────────
 function onSearch(val) { state.search = val; render(); }
 function onFilter(cat) { state.filterCat = cat; render(); }
+
+function onFreePortInput(val) {
+  state.freePort = val;
+  state.freeResult = null;
+  render();
+}
+
+function checkFreePort() {
+  var raw = state.freePort.trim();
+  var port = parseInt(raw, 10);
+  if (!raw || isNaN(port) || port < 1 || port > 65535) {
+    state.freeResult = 'invalid';
+    render();
+    return;
+  }
+  state.freeResult = 'checking';
+  render();
+  if (IS_TAURI) {
+    window.__TAURI__.tauri.invoke('check_port_free', { port: port }).then(function(free) {
+      state.freeResult = free ? 'free' : 'used';
+      render();
+    }).catch(function() {
+      state.freeResult = 'invalid';
+      render();
+    });
+  } else {
+    // Mock: a port already in the list counts as used
+    setTimeout(function() {
+      var inUse = state.ports.some(function(p) { return p.port === port; });
+      state.freeResult = inUse ? 'used' : 'free';
+      render();
+    }, 300);
+  }
+}
 
 function toggleSelect(pid) {
   if (state.selected[pid]) { delete state.selected[pid]; }
@@ -752,23 +1091,150 @@ function toggleGroup(catName) {
 
 function openModal(mode, catName, pid) {
   var targets;
-  if (mode === 'single') {
-    targets = state.ports.filter(function(p) { return p.pid === pid; });
-  } else if (mode === 'group') {
+  if (mode === 'group') {
     targets = state.ports.filter(function(p) { return p.category === catName; });
   } else {
     targets = getSelectedPorts();
   }
   if (targets.length === 0) return;
-  state.modal = { targets: targets, force: false };
+  state.modal = { targets: targets, force: false, mode: mode, catName: catName };
   render();
+}
+
+// Single-row kill: no confirmation — the red X is an intentional, per-row action
+function killSingle(pid) {
+  var target = state.ports.filter(function(p) { return p.pid === pid; });
+  if (target.length === 0) return;
+  state.modal = { targets: target, force: false, mode: 'single' };
+  doKill();
+}
+
+function clearSelection() { state.selected = {}; render(); }
+
+function clearAllFilters() {
+  state.search = '';
+  state.filterCat = 'All';
+  state.sortKey = null;
+  state.sortDir = 'asc';
+  render();
+}
+
+function setSortFromSelect(value) {
+  if (!value) { state.sortKey = null; state.sortDir = 'asc'; }
+  else {
+    var parts = value.split(':');
+    state.sortKey = parts[0];
+    state.sortDir = parts[1] || 'asc';
+  }
+  render();
+}
+
+function copyText(text, label) {
+  var display = label ? 'Copied ' + label : 'Copied';
+  var done = function() { showToast(display); };
+  var fail = function() { showToast('Copy failed', 'error'); };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(String(text)).then(done, fail);
+      return;
+    }
+  } catch(e) {}
+  // Fallback for older webviews
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = String(text); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    done();
+  } catch(e) { fail(); }
 }
 
 function closeModal() { state.modal = null; render(); }
 function toggleForce() { if (state.modal) state.modal.force = !state.modal.force; render(); }
 
+// ─── Footer status ticker ──────────────────────────────────────────────────
+function formatAgo(ts) {
+  if (!ts) return 'never';
+  var s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 2) return 'just now';
+  if (s < 60) return s + 's ago';
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  var h = Math.floor(m / 60);
+  return h + 'h ago';
+}
+
+// Staleness threshold: auto-scan runs every 3s, so 10s means we've missed ~3 ticks.
+var STALE_SCAN_MS = 10000;
+
+function updateFooterStatus() {
+  var el = document.getElementById('footer-status');
+  if (!el) return;
+  var html = '';
+  if (state.scanning) {
+    html = '<span class="spinner-sm"></span><span>Scanning…</span>';
+  } else if (!IS_TAURI) {
+    html = '<span class="pulse-dot"></span><span>Browser preview — using mock data</span>';
+  } else {
+    var stale = state.lastScanAt && (Date.now() - state.lastScanAt) > STALE_SCAN_MS;
+    html = '<span class="pulse-dot' + (stale ? ' stale' : '') + '"></span>';
+    if (stale) {
+      html += '<span>Last scanned: ' + formatAgo(state.lastScanAt) + ' — live updates paused</span>';
+    } else {
+      html += '<span>Last scanned: ' + formatAgo(state.lastScanAt) + '</span>';
+    }
+  }
+  el.innerHTML = html;
+}
+
+setInterval(updateFooterStatus, 1000);
+
+// ─── Keyboard shortcuts ────────────────────────────────────────────────────
+// Fixed mapping — stable across scans so muscle memory works even when a
+// category's count drops to zero.
+var SHORTCUT_CATEGORIES = ['All', 'Dev Servers', 'Databases', 'Web / Proxy', 'Containers'];
+
+window.addEventListener('keydown', function(e) {
+  var meta = e.metaKey || e.ctrlKey;
+  var tag = (e.target && e.target.tagName) || '';
+  var inInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+  if (e.key === 'Escape') {
+    if (state.modal) { closeModal(); e.preventDefault(); return; }
+    if (state.toast && state.toast.type === 'error') { dismissToast(); e.preventDefault(); return; }
+    if (state.search) { state.search = ''; render(); e.preventDefault(); return; }
+    if (inInput && e.target.blur) e.target.blur();
+    return;
+  }
+
+  // Enter inside modal confirms kill — unless focus is in the force-kill checkbox
+  if (state.modal && e.key === 'Enter' && !inInput) {
+    if (e.target && e.target.id === 'force-kill') return;
+    e.preventDefault();
+    doKill();
+    return;
+  }
+
+  if (!meta) return;
+
+  if (e.key === 'r' || e.key === 'R') {
+    e.preventDefault();
+    if (!state.scanning) doScan();
+  } else if (e.key === 'f' || e.key === 'F') {
+    e.preventDefault();
+    var input = document.querySelector('.search-input');
+    if (input) input.focus();
+  } else if (/^[1-5]$/.test(e.key)) {
+    e.preventDefault();
+    var idx = parseInt(e.key, 10) - 1;
+    if (SHORTCUT_CATEGORIES[idx]) { state.filterCat = SHORTCUT_CATEGORIES[idx]; render(); }
+  }
+});
+
 // ─── Init ──────────────────────────────────────────────────────────────────
 doScan();
+updateFooterStatus();
 </script>
 </body>
 </html>

@@ -342,11 +342,18 @@ fn kill_ports(pids: Vec<u32>, force: bool) -> KillResult {
     }
 }
 
+// Returns true if no process is currently bound to the given TCP port.
+#[tauri::command]
+fn check_port_free(port: u16) -> bool {
+    use std::net::TcpListener;
+    TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![scan_ports, kill_ports])
+        .invoke_handler(tauri::generate_handler![scan_ports, kill_ports, check_port_free])
         .run(tauri::generate_context!())
         .expect("error while running Port Manager");
 }

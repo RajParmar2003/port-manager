@@ -1026,7 +1026,14 @@ function render() {
     var hasManagedTargets = targets.some(function(t) { return t.launch_agent; });
 
     html += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()">';
-    html += '<h3>Kill ' + targets.length + ' port' + (targets.length > 1 ? 's' : '') + '?</h3>';
+    // Title names the scope when there is one (project basename, category name)
+    // so bulk kills always tell the user exactly what they're about to destroy.
+    var titleSuffix = '';
+    if (state.modal.scopeLabel) {
+      var lbl = state.modal.scopeLabel;
+      titleSuffix = ' in ' + (lbl.kind === 'project' ? '<span style="color:var(--accent)">' : '<span>') + esc(lbl.text) + '</span>';
+    }
+    html += '<h3>Kill ' + targets.length + ' port' + (targets.length > 1 ? 's' : '') + titleSuffix + '?</h3>';
     html += '<p>This will send <code style="background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px">' + (state.modal.force ? 'SIGKILL (-9)' : 'SIGTERM (-15)') + '</code> to:</p>';
     html += '<div class="modal-list">';
     for (var mi = 0; mi < targets.length; mi++) {
@@ -1106,16 +1113,23 @@ function setGroupBy(mode) {
   render();
 }
 function openModal(mode, scopeKey, pid) {
-  var targets;
-  if (mode === 'single') targets = state.ports.filter(function(p) { return p.pid === pid; });
-  else if (mode === 'group') targets = state.ports.filter(function(p) { return p.category === scopeKey; });
-  else if (mode === 'project') targets = state.ports.filter(function(p) {
-    if (scopeKey === '__unassigned__') return !p.project;
-    return p.project === scopeKey;
-  });
-  else targets = getSelectedPorts();
+  var targets, scopeLabel = null;
+  if (mode === 'single') {
+    targets = state.ports.filter(function(p) { return p.pid === pid; });
+  } else if (mode === 'group') {
+    targets = state.ports.filter(function(p) { return p.category === scopeKey; });
+    scopeLabel = { kind: 'category', text: scopeKey };
+  } else if (mode === 'project') {
+    targets = state.ports.filter(function(p) {
+      if (scopeKey === '__unassigned__') return !p.project;
+      return p.project === scopeKey;
+    });
+    scopeLabel = { kind: 'project', text: scopeKey === '__unassigned__' ? 'Unassigned' : basename(scopeKey) };
+  } else {
+    targets = getSelectedPorts();
+  }
   if (targets.length === 0) return;
-  state.modal = { targets: targets, force: false }; render();
+  state.modal = { targets: targets, force: false, scopeLabel: scopeLabel }; render();
 }
 function closeModal() { state.modal = null; render(); }
 function toggleForce() { if (state.modal) state.modal.force = !state.modal.force; render(); }

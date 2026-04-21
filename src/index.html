@@ -710,6 +710,47 @@ function doKill() {
   }).catch(function(e) { showToast('Kill failed: ' + e, 'error'); render(); });
 }
 
+// Find the first port >= start that isn't in the current scan. `limit` caps
+// the walk so a fully-loaded range can't lock us in a loop. Returns null if
+// every port in [start, start+limit) is occupied.
+function findNextFreePort(start, limit) {
+  if (!limit) limit = 100;
+  // Build a Set of occupied ports from the current scan for O(1) lookup.
+  var taken = {};
+  for (var i = 0; i < state.ports.length; i++) taken[state.ports[i].port] = true;
+  for (var p = start; p < start + limit && p <= 65535; p++) {
+    if (!taken[p]) return p;
+  }
+  return null;
+}
+
+// Read the free-port input, find the next unbound port >= that number,
+// copy it to clipboard, toast the result. Non-destructive counterpart to
+// doFreePort — for the "I just need *a* port" workflow.
+function doSuggestFreePort() {
+  var raw = (state.freePortValue || '').trim();
+  var start = raw ? parseInt(raw, 10) : 3000;
+  if (!start || start < 1 || start > 65535) { showToast('Enter a valid port (1-65535)', 'error'); return; }
+  var found = findNextFreePort(start, 100);
+  if (found === null) {
+    showToast('No free port in ' + start + '–' + (start + 99), 'error');
+    return;
+  }
+  // Copy via the same path copyToClipboard uses. Swallow the built-in "Copied
+  // N" toast — we want our own, more informative message.
+  try {
+    if (window.__TAURI__ && window.__TAURI__.clipboard) {
+      window.__TAURI__.clipboard.writeText(String(found));
+    } else {
+      navigator.clipboard.writeText(String(found));
+    }
+    showToast('Next free: ' + found + ' · copied');
+  } catch (e) {
+    // If clipboard fails, still surface the answer — Maya can retype it.
+    showToast('Next free: ' + found + ' (copy failed)', 'error');
+  }
+}
+
 function doFreePort() {
   var port = parseInt(state.freePortValue);
   if (!port || port < 1 || port > 65535) { showToast('Enter a valid port (1-65535)', 'error'); return; }
@@ -858,7 +899,7 @@ function render() {
   if (state.search) html += '<button class="search-clear" onclick="onSearch(\'\')" title="Clear search (Esc)">&#10005;</button>';
   html += '</div>';
   html += '<div class="free-port-wrap">';
-  html += '<input class="free-port-input" type="text" placeholder="Port #" value="' + esc(state.freePortValue) + '" oninput="state.freePortValue=this.value" onkeydown="if(event.key===\'Enter\')doFreePort()" />';
+  html += '<input class="free-port-input" type="text" placeholder="Port #" value="' + esc(state.freePortValue) + '" oninput="state.freePortValue=this.value" onkeydown="if(event.key===\'Enter\'){event.shiftKey?doSuggestFreePort():doFreePort()}" />';
   html += '<button class="free-port-btn" onclick="doFreePort()">FREE</button>';
   html += '</div></div>';
 

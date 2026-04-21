@@ -113,6 +113,15 @@
     }
     .free-port-input:focus { border-color: var(--accent); }
     .free-port-input::placeholder { color: var(--text-dim); }
+    /* "Next" — non-destructive: finds next unused port. Neutral accent so the
+       eye reads it as safe; FREE (red, adjacent) carries the destructive weight. */
+    .free-port-btn-next {
+      padding: 0 12px; border-radius: 0;
+      background: var(--surface); color: var(--text); font-size: 12px; font-weight: 700;
+      font-family: var(--sans); border: 1px solid var(--border);
+      white-space: nowrap; cursor: pointer;
+    }
+    .free-port-btn-next:hover { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); }
     .free-port-btn {
       padding: 0 14px; border-radius: 0 var(--radius) var(--radius) 0;
       background: var(--red); color: #fff; font-size: 12px; font-weight: 700;
@@ -900,7 +909,8 @@ function render() {
   html += '</div>';
   html += '<div class="free-port-wrap">';
   html += '<input class="free-port-input" type="text" placeholder="Port #" value="' + esc(state.freePortValue) + '" oninput="state.freePortValue=this.value" onkeydown="if(event.key===\'Enter\'){event.shiftKey?doSuggestFreePort():doFreePort()}" />';
-  html += '<button class="free-port-btn" onclick="doFreePort()">FREE</button>';
+  html += '<button class="free-port-btn-next" onclick="doSuggestFreePort()" title="Find next free port ≥ typed number (⇧Enter). Copies to clipboard.">Next</button>';
+  html += '<button class="free-port-btn" onclick="doFreePort()" title="Kill the process holding this port (Enter)">FREE</button>';
   html += '</div></div>';
 
   // (View toggle is now in the header)

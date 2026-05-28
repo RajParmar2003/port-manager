@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    name: Rust (cargo check + release build + clippy)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets
+
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo build (release)
+        working-directory: src-tauri
+        run: cargo build --release
+
+  frontend:
+    name: Frontend (JS parse check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Parse the inline script block in index.html
+        run: |
+          node -e "
+            const fs = require('fs');
+            const html = fs.readFileSync('src/index.html', 'utf8');
+            const m = html.match(/<script>([\s\\S]*?)<\/script>/);
+            if (!m) { console.error('no <script> block found'); process.exit(1); }
+            try {
+              new Function(m[1]);
+              console.log('JS parses clean — ' + m[1].split('\\n').length + ' lines');
+            } catch (e) {
+              console.error('Parse error:', e.message);
+              process.exit(1);
+            }
+          "

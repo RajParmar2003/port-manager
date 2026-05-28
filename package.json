@@ -1,6 +1,6 @@
 {
   "name": "port-manager",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "macOS Port Manager — scan, group, and kill open ports without the terminal",
   "scripts": {
     "tauri": "cargo tauri dev",

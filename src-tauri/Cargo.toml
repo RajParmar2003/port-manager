@@ -4,10 +4,13 @@
 
 [package]
 name = "port-manager"
-version = "1.0.0"
-description = "A macOS port manager — scan, group, and kill open ports"
+version = "0.1.0"
+description = "A native macOS app that scans, groups, and kills open ports without the terminal"
 authors = ["Rajwinder Parmar <rparmar2003@outlook.com>"]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/RajParmar2003/port-manager"
+readme = "../README.md"
 
 [build-dependencies]
 tauri-build = { version = "1", features = [] }

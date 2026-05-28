@@ -6,7 +6,7 @@
 name = "port-manager"
 version = "1.0.0"
 description = "A macOS port manager — scan, group, and kill open ports"
-authors = ["you"]
+authors = ["Rajwinder Parmar <rparmar2003@outlook.com>"]
 edition = "2021"
 
 [build-dependencies]

@@ -473,7 +473,7 @@ fn format_etime(raw: &str) -> String {
         let d: u64 = raw[..pos].parse().unwrap_or(0);
         (d, &raw[pos + 1..])
     } else {
-        (0, raw.as_ref())
+        (0, raw)
     };
 
     let parts: Vec<u64> = rest.split(':').filter_map(|p| p.parse().ok()).collect();
@@ -1202,7 +1202,7 @@ fn main() {
                 }
                 // macOS: fires when dock icon is clicked (applicationDidBecomeActive).
                 // If window was hidden to tray, restore it.
-                tauri::RunEvent::Resumed { .. } => {
+                tauri::RunEvent::Resumed => {
                     if let Some(window) = app_handle.get_window("main") {
                         if !window.is_visible().unwrap_or(true) {
                             let _ = window.show();
